@@ -1,0 +1,32 @@
+name: Arduino Remote Compile
+on:
+  repository_dispatch:
+    types: [compile_cmd]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout builds branch
+        uses: actions/checkout@v4
+        with:
+          ref: builds
+
+      - name: Setup Arduino CLI
+        uses: arduino/setup-arduino-cli@v1
+
+      - name: Compile Sketch
+        run: |
+          echo "${{ github.event.client_payload.code }}" > sketch.ino
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr
+          arduino-cli compile --fqbn arduino:avr:uno sketch.ino --output-dir ./out
+
+      - name: Push Firmware
+        run: |
+          git config --global user.name "CompilerBot"
+          git config --global user.email "bot@github.com"
+          mv out/sketch.ino.hex firmware.hex
+          git add firmware.hex
+          git commit -m "Build: ${{ github.event.client_payload.filename }}" || echo "No changes"
+          git push origin builds --force
