@@ -382,18 +382,96 @@
 
             <div class="card">
                 <h3 class="text-lg font-bold mb-4 text-accent-secondary" style="font-family: 'Syne', sans-serif;">Flash</h3>
-                <button class="btn btn-primary w-full" onclick="flashArduino()" id="flashBtn">
-                    <span>⚡ Flash Device</span>
-                </button>
-                <div id="flashStatus" class="mt-4"></div>
+                
+                <!-- Board and Baud Rate Selection -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="label">Board Type</label>
+                        <select id="boardType" class="input-field">
+                            <option value="uno">Arduino Uno</option>
+                            <option value="nano">Arduino Nano</option>
+                            <option value="mega">Arduino Mega</option>
+                            <option value="leonardo">Arduino Leonardo</option>
+                            <option value="esp32">ESP32</option>
+                            <option value="esp32-s2">ESP32-S2</option>
+                            <option value="esp32-s3">ESP32-S3</option>
+                            <option value="esp32-c3">ESP32-C3</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label">Baud Rate</label>
+                        <select id="baudRate" class="input-field">
+                            <option value="115200">115200</option>
+                            <option value="57600">57600</option>
+                            <option value="38400">38400</option>
+                            <option value="19200">19200</option>
+                            <option value="9600">9600</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Connect and Flash Buttons -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                    <button class="btn btn-secondary w-full" onclick="connectSerial()" id="connectBtn">
+                        <span>🔌 Connect to Board</span>
+                    </button>
+                    <button class="btn btn-primary w-full" onclick="flashArduino()" id="flashBtn" disabled>
+                        <span>⚡ Flash Device</span>
+                    </button>
+                </div>
+
+                <div id="flashStatus" class="mb-4"></div>
+
+                <!-- Connection Status -->
+                <div id="portStatus" class="text-sm text-text-secondary"></div>
             </div>
         </div>
 
         <!-- Console Section -->
-        <div class="card">
+        <div class="card mb-8">
             <h2 class="text-xl font-bold mb-6 text-accent-primary" style="font-family: 'Syne', sans-serif;">Console Output</h2>
             <div id="console" class="bg-bg-tertiary p-4 rounded-lg h-64 overflow-y-auto font-mono text-sm" style="font-family: 'JetBrains Mono', monospace;">
                 <div class="text-text-secondary">Ready to compile and flash...</div>
+            </div>
+        </div>
+
+        <!-- Serial Monitor Section -->
+        <div class="card">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-accent-secondary" style="font-family: 'Syne', sans-serif;">Serial Monitor</h2>
+                <div class="flex gap-3 items-center">
+                    <select id="serialBaudRate" class="input-field" style="width: auto; padding: 0.5rem 1rem;">
+                        <option value="9600">9600</option>
+                        <option value="19200">19200</option>
+                        <option value="38400">38400</option>
+                        <option value="57600">57600</option>
+                        <option value="115200">115200</option>
+                    </select>
+                    <button class="btn btn-secondary" onclick="startSerialMonitor()" id="serialStartBtn" disabled>
+                        <span>▶ Start</span>
+                    </button>
+                    <button class="btn btn-secondary" onclick="stopSerialMonitor()" id="serialStopBtn" disabled>
+                        <span>⏹ Stop</span>
+                    </button>
+                    <button class="btn btn-secondary" onclick="clearSerialMonitor()">
+                        <span>Clear</span>
+                    </button>
+                </div>
+            </div>
+            <div id="serialMonitor" class="bg-bg-tertiary p-4 rounded-lg h-64 overflow-y-auto font-mono text-sm" style="font-family: 'JetBrains Mono', monospace;">
+                <div class="text-text-secondary">Connect to board and start serial monitor...</div>
+            </div>
+            <div class="mt-4 flex gap-3">
+                <input 
+                    type="text" 
+                    id="serialInput" 
+                    class="input-field flex-1" 
+                    placeholder="Type message to send..."
+                    disabled
+                >
+                <button class="btn btn-primary" onclick="sendSerialData()" id="serialSendBtn" disabled>
+                    <span>Send</span>
+                </button>
             </div>
         </div>
     </div>
@@ -404,9 +482,17 @@
     <!-- AVRGirl Arduino -->
     <script src="https://cdn.jsdelivr.net/npm/avrgirl-arduino@3.0.0/dist/avrgirl-arduino.min.js"></script>
 
+    <!-- ESPTool for ESP32 -->
+    <script src="https://unpkg.com/esptool-js@0.4.0/bundle.js"></script>
+
     <script>
         let editor;
         let avrgirl;
+        let serialPort = null;
+        let serialReader = null;
+        let serialWriter = null;
+        let isSerialReading = false;
+        let esploader = null;
 
         // Initialize Monaco Editor
         require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs' }});
@@ -769,92 +855,340 @@ void loop() {
                 }
         }
 
-        // Flash Arduino
-        async function flashArduino() {
-            if (!validateConfig()) {
-                showStatus('flashStatus', 'GitHub configuration required', 'error');
-                return;
-            }
-
-            const config = getGitHubConfig();
+        // Connect to Serial Port
+        async function connectSerial() {
+            const connectBtn = document.getElementById('connectBtn');
             const flashBtn = document.getElementById('flashBtn');
-
-            flashBtn.disabled = true;
-            flashBtn.innerHTML = '<span><div class="spinner"></div>Flashing...</span>';
-            clearStatus('flashStatus');
-            
-            logToConsole('⚡ Starting flash process...', 'info');
+            const serialStartBtn = document.getElementById('serialStartBtn');
+            const portStatus = document.getElementById('portStatus');
+            const boardType = document.getElementById('boardType').value;
 
             try {
-                // Download firmware.hex from builds branch
-                logToConsole('📥 Downloading firmware.hex from builds branch...', 'info');
-                
-                const firmwareUrl = `https://raw.githubusercontent.com/${config.username}/${config.repo}/builds/firmware.hex`;
-                const firmwareResponse = await fetch(firmwareUrl, {
-                    headers: {
-                        'Authorization': `token ${config.token}`
-                    }
-                });
-
-                if (!firmwareResponse.ok) {
-                    throw new Error(`Failed to download firmware: ${firmwareResponse.status}. Make sure firmware.hex exists in the builds branch.`);
-                }
-
-                const hexData = await firmwareResponse.text();
-                logToConsole('✓ Firmware downloaded successfully', 'success');
-                logToConsole(`Firmware size: ${hexData.length} bytes`, 'info');
-
-                // Request serial port access
-                logToConsole('🔌 Requesting serial port access...', 'info');
-                showStatus('flashStatus', 'Waiting for device selection...', 'info');
-
                 if (!navigator.serial) {
                     throw new Error('Web Serial API not supported. Please use Chrome, Edge, or Opera.');
                 }
 
-                const port = await navigator.serial.requestPort({
-                    filters: [
-                        { usbVendorId: 0x2341 }, // Arduino
-                        { usbVendorId: 0x1a86 }, // CH340
-                        { usbVendorId: 0x0403 }  // FTDI
-                    ]
-                });
+                logToConsole('🔌 Requesting serial port access...', 'info');
+                connectBtn.disabled = true;
+                connectBtn.innerHTML = '<span><div class="spinner"></div>Connecting...</span>';
 
-                logToConsole('✓ Serial port selected', 'success');
-                showStatus('flashStatus', 'Flashing device...', 'info');
+                // Different USB vendor IDs for different boards
+                const filters = [
+                    { usbVendorId: 0x2341 }, // Arduino
+                    { usbVendorId: 0x1a86 }, // CH340
+                    { usbVendorId: 0x0403 }, // FTDI
+                    { usbVendorId: 0x10c4 }, // Silicon Labs CP210x (ESP32)
+                    { usbVendorId: 0x1a86 }, // CH9102 (ESP32)
+                    { usbVendorId: 0x303a }  // Espressif USB JTAG/serial debug unit (ESP32-S2/S3/C3)
+                ];
 
-                // Initialize AVRGirl
-                avrgirl = new AvrgirlArduino({
-                    board: 'uno',
-                    port: port
-                });
+                serialPort = await navigator.serial.requestPort({ filters });
 
-                // Flash the board
-                logToConsole('⚡ Uploading firmware to Arduino Uno...', 'info');
+                const baudRate = parseInt(document.getElementById('baudRate').value);
                 
-                await new Promise((resolve, reject) => {
-                    avrgirl.flash(hexData, (error) => {
-                        if (error) {
-                            reject(error);
-                        } else {
-                            resolve();
-                        }
-                    });
-                });
+                await serialPort.open({ baudRate: baudRate });
 
-                showStatus('flashStatus', 'Flash completed successfully!', 'success');
-                logToConsole('✓ Arduino flashed successfully!', 'success');
-                logToConsole('Your device is now running the new firmware', 'success');
+                // Get writer for sending data
+                serialWriter = serialPort.writable.getWriter();
+
+                const boardName = boardType.toUpperCase().replace(/-/g, ' ');
+                logToConsole(`✓ Connected to ${boardName} at ${baudRate} baud`, 'success');
+                portStatus.innerHTML = `<span class="text-accent-primary">● Connected to ${boardName} at ${baudRate} baud</span>`;
+
+                // Enable flash and serial monitor buttons
+                flashBtn.disabled = false;
+                serialStartBtn.disabled = false;
+                connectBtn.innerHTML = '<span>🔌 Connected</span>';
+                connectBtn.disabled = true;
 
             } catch (error) {
-                showStatus('flashStatus', 'Flash failed', 'error');
-                logToConsole(`✗ Flash error: ${error.message}`, 'error');
-                console.error(error);
-            } finally {
-                flashBtn.disabled = false;
-                flashBtn.innerHTML = '<span>⚡ Flash Device</span>';
+                logToConsole(`✗ Connection error: ${error.message}`, 'error');
+                portStatus.innerHTML = `<span class="text-error">● Disconnected</span>`;
+                connectBtn.disabled = false;
+                connectBtn.innerHTML = '<span>🔌 Connect to Board</span>';
             }
         }
+
+        // Disconnect Serial Port
+        async function disconnectSerial() {
+            try {
+                if (isSerialReading) {
+                    await stopSerialMonitor();
+                }
+
+                if (serialWriter) {
+                    await serialWriter.releaseLock();
+                    serialWriter = null;
+                }
+
+                if (serialPort) {
+                    await serialPort.close();
+                    serialPort = null;
+                }
+
+                document.getElementById('flashBtn').disabled = true;
+                document.getElementById('serialStartBtn').disabled = true;
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('connectBtn').innerHTML = '<span>🔌 Connect to Board</span>';
+                document.getElementById('portStatus').innerHTML = `<span class="text-text-secondary">● Disconnected</span>`;
+
+                logToConsole('✓ Serial port disconnected', 'info');
+            } catch (error) {
+                logToConsole(`✗ Disconnect error: ${error.message}`, 'error');
+            }
+        }
+
+        // Flash Arduino
+        async function flashArduino() {
+                if (!serialPort) {
+                    showStatus('flashStatus', 'Please connect to board first', 'error');
+                    logToConsole('✗ No serial port connected. Click "Connect to Board" first.', 'error');
+                    return;
+                }
+
+                const flashBtn = document.getElementById('flashBtn');
+                const boardType = document.getElementById('boardType').value;
+
+                flashBtn.disabled = true;
+                flashBtn.innerHTML = '<span><div class="spinner"></div>Flashing...</span>';
+                clearStatus('flashStatus');
+                
+                logToConsole('⚡ Starting flash process...', 'info');
+
+                try {
+                    // Temporarily disconnect serial monitor if running
+                    const wasReading = isSerialReading;
+                    if (isSerialReading) {
+                        await stopSerialMonitor();
+                    }
+
+                    // Скачиваем firmware.hex из ветки builds с cache busting
+                    const timestamp = Date.now();
+                    const firmwareUrl = `https://raw.githubusercontent.com/Narek-D8v/arduino-web-compiler/builds/firmware.hex?t=${timestamp}`;
+                    
+                    logToConsole('📥 Downloading firmware.hex from builds branch...', 'info');
+                    showStatus('flashStatus', 'Downloading firmware...', 'info');
+                    
+                    const firmwareResponse = await fetch(firmwareUrl, {
+                        cache: 'no-store'  // Дополнительная защита от кэша
+                    });
+
+                    if (!firmwareResponse.ok) {
+                        throw new Error(`Failed to download firmware: ${firmwareResponse.status}. Make sure firmware.hex exists in the builds branch.`);
+                    }
+
+                    const hexData = await firmwareResponse.text();
+                    
+                    // Проверяем, что файл не пустой и является валидным HEX
+                    if (!hexData || hexData.length < 100) {
+                        throw new Error('Downloaded firmware file is empty or corrupted');
+                    }
+                    
+                    if (!hexData.includes(':') || !hexData.match(/^:/m)) {
+                        throw new Error('Invalid HEX file format');
+                    }
+                    
+                    logToConsole('✓ Firmware downloaded successfully', 'success');
+                    logToConsole(`Firmware size: ${hexData.length} bytes`, 'info');
+
+                    showStatus('flashStatus', 'Flashing device...', 'info');
+
+                    // Инициализируем AVRGirl с выбранным типом платы
+                    logToConsole(`⚡ Initializing AVRGirl for ${boardType.toUpperCase()}...`, 'info');
+                    
+                    avrgirl = new AvrgirlArduino({
+                        board: boardType,
+                        port: serialPort
+                    });
+
+                    // Прошиваем плату
+                    logToConsole(`⚡ Uploading firmware to ${boardType.toUpperCase()}...`, 'info');
+                    logToConsole('Please wait, this may take 10-30 seconds...', 'warning');
+                    
+                    await new Promise((resolve, reject) => {
+                        avrgirl.flash(hexData, (error) => {
+                            if (error) {
+                                reject(error);
+                            } else {
+                                resolve();
+                            }
+                        });
+                    });
+
+                    showStatus('flashStatus', 'Flash completed successfully!', 'success');
+                    logToConsole('✓ Arduino flashed successfully!', 'success');
+                    logToConsole('Your device is now running the new firmware', 'success');
+
+                    // Reconnect serial monitor if it was running
+                    if (wasReading) {
+                        setTimeout(() => {
+                            startSerialMonitor();
+                        }, 1000);
+                    }
+
+                } catch (error) {
+                    showStatus('flashStatus', 'Flash failed', 'error');
+                    
+                    // Специфичные сообщения об ошибках
+                    if (error.message.includes('No port selected')) {
+                        logToConsole('✗ No serial port selected. Please connect first.', 'error');
+                    } else if (error.message.includes('download')) {
+                        logToConsole('✗ Failed to download firmware. Please compile first.', 'error');
+                    } else if (error.message.includes('Invalid HEX')) {
+                        logToConsole('✗ Firmware file is corrupted. Please recompile.', 'error');
+                    } else {
+                        logToConsole(`✗ Flash error: ${error.message}`, 'error');
+                    }
+                    
+                    console.error(error);
+                } finally {
+                    flashBtn.disabled = false;
+                    flashBtn.innerHTML = '<span>⚡ Flash Device</span>';
+                }
+        }
+
+        // Serial Monitor Functions
+        function logToSerialMonitor(message, color = '#e5e7eb') {
+            const monitor = document.getElementById('serialMonitor');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            const logEntry = document.createElement('div');
+            logEntry.style.color = color;
+            logEntry.style.marginBottom = '0.25rem';
+            logEntry.innerHTML = `<span style="color: #6b7280;">[${timestamp}]</span> ${message}`;
+            
+            monitor.appendChild(logEntry);
+            monitor.scrollTop = monitor.scrollHeight;
+        }
+
+        function clearSerialMonitor() {
+            document.getElementById('serialMonitor').innerHTML = '';
+            logToSerialMonitor('Serial monitor cleared', '#9ca3af');
+        }
+
+        async function startSerialMonitor() {
+            if (!serialPort) {
+                logToConsole('✗ No serial port connected', 'error');
+                return;
+            }
+
+            if (isSerialReading) {
+                logToConsole('⚠ Serial monitor already running', 'warning');
+                return;
+            }
+
+            try {
+                const serialBaudRate = parseInt(document.getElementById('serialBaudRate').value);
+
+                // Close and reopen port with new baud rate if different
+                const currentBaudRate = parseInt(document.getElementById('baudRate').value);
+                if (serialBaudRate !== currentBaudRate) {
+                    logToConsole(`Reconnecting at ${serialBaudRate} baud...`, 'info');
+                    
+                    if (serialWriter) {
+                        await serialWriter.releaseLock();
+                    }
+                    await serialPort.close();
+                    
+                    await serialPort.open({ baudRate: serialBaudRate });
+                    serialWriter = serialPort.writable.getWriter();
+                    
+                    document.getElementById('baudRate').value = serialBaudRate;
+                    document.getElementById('portStatus').innerHTML = `<span class="text-accent-primary">● Connected at ${serialBaudRate} baud</span>`;
+                }
+
+                isSerialReading = true;
+                
+                // Enable/disable buttons
+                document.getElementById('serialStartBtn').disabled = true;
+                document.getElementById('serialStopBtn').disabled = false;
+                document.getElementById('serialInput').disabled = false;
+                document.getElementById('serialSendBtn').disabled = false;
+
+                logToSerialMonitor('=== Serial Monitor Started ===', '#00ff88');
+                logToConsole(`✓ Serial monitor started at ${serialBaudRate} baud`, 'success');
+
+                // Start reading
+                serialReader = serialPort.readable.getReader();
+                
+                while (isSerialReading && serialPort.readable) {
+                    try {
+                        const { value, done } = await serialReader.read();
+                        if (done) break;
+                        
+                        const text = new TextDecoder().decode(value);
+                        logToSerialMonitor(text.trim(), '#e5e7eb');
+                    } catch (error) {
+                        if (isSerialReading) {
+                            logToConsole(`✗ Read error: ${error.message}`, 'error');
+                        }
+                        break;
+                    }
+                }
+
+            } catch (error) {
+                logToConsole(`✗ Serial monitor error: ${error.message}`, 'error');
+                isSerialReading = false;
+            }
+        }
+
+        async function stopSerialMonitor() {
+            if (!isSerialReading) return;
+
+            isSerialReading = false;
+
+            try {
+                if (serialReader) {
+                    await serialReader.cancel();
+                    await serialReader.releaseLock();
+                    serialReader = null;
+                }
+
+                document.getElementById('serialStartBtn').disabled = false;
+                document.getElementById('serialStopBtn').disabled = true;
+                document.getElementById('serialInput').disabled = true;
+                document.getElementById('serialSendBtn').disabled = true;
+
+                logToSerialMonitor('=== Serial Monitor Stopped ===', '#ffaa00');
+                logToConsole('✓ Serial monitor stopped', 'info');
+            } catch (error) {
+                logToConsole(`✗ Error stopping serial monitor: ${error.message}`, 'error');
+            }
+        }
+
+        async function sendSerialData() {
+            if (!serialWriter) {
+                logToConsole('✗ Serial port not ready for writing', 'error');
+                return;
+            }
+
+            const input = document.getElementById('serialInput');
+            const data = input.value;
+
+            if (!data) return;
+
+            try {
+                const encoder = new TextEncoder();
+                await serialWriter.write(encoder.encode(data + '\n'));
+                
+                logToSerialMonitor(`>> ${data}`, '#0099ff');
+                input.value = '';
+            } catch (error) {
+                logToConsole(`✗ Send error: ${error.message}`, 'error');
+            }
+        }
+
+        // Allow Enter key to send serial data
+        document.addEventListener('DOMContentLoaded', function() {
+            const serialInput = document.getElementById('serialInput');
+            if (serialInput) {
+                serialInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        sendSerialData();
+                    }
+                });
+            }
+        });
 
         // Clear editor
         function clearEditor() {
