@@ -405,13 +405,6 @@
     <script src="https://cdn.jsdelivr.net/npm/avrgirl-arduino@3.0.0/dist/avrgirl-arduino.min.js"></script>
 
     <script>
-        // GitHub Configuration - укажите ваши данные здесь
-        const GITHUB_CONFIG = {
-            token: 'YOUR_GITHUB_TOKEN',        // Замените на ваш GitHub токен
-            username: 'YOUR_USERNAME',         // Замените на ваш GitHub username
-            repo: 'YOUR_REPOSITORY'            // Замените на название репозитория
-        };
-
         let editor;
         let avrgirl;
 
@@ -733,87 +726,47 @@ void loop() {
             document.getElementById(elementId).innerHTML = '';
         }
 
-        // Get GitHub config
-        function getGitHubConfig() {
-            return GITHUB_CONFIG;
-        }
-
-        // Validate GitHub config
-        function validateConfig() {
-            const config = getGitHubConfig();
-            
-            if (!config.token || config.token === 'YOUR_GITHUB_TOKEN') {
-                showStatus('compileStatus', 'GitHub Token not configured', 'error');
-                logToConsole('✗ GitHub Token not set in code. Please edit GITHUB_CONFIG.', 'error');
-                return false;
-            }
-            
-            if (!config.username || config.username === 'YOUR_USERNAME') {
-                showStatus('compileStatus', 'Username not configured', 'error');
-                logToConsole('✗ GitHub Username not set in code. Please edit GITHUB_CONFIG.', 'error');
-                return false;
-            }
-            
-            if (!config.repo || config.repo === 'YOUR_REPOSITORY') {
-                showStatus('compileStatus', 'Repository not configured', 'error');
-                logToConsole('✗ Repository name not set in code. Please edit GITHUB_CONFIG.', 'error');
-                return false;
-            }
-            
-            return true;
-        }
-
         // Compile code
         async function compileCode() {
-            if (!validateConfig()) return;
+                const code = editor.getValue();
+                const compileBtn = document.getElementById('compileBtn');
 
-            const config = getGitHubConfig();
-            const code = editor.getValue();
-            const compileBtn = document.getElementById('compileBtn');
+                compileBtn.disabled = true;
+                compileBtn.innerHTML = '<span><div class="spinner"></div>Compiling...</span>';
+                clearStatus('compileStatus');
+                
+                logToConsole('🔨 Starting compilation...', 'info');
+                logToConsole('Repository: Narek-D8v/arduino-web-compiler', 'info');
 
-            compileBtn.disabled = true;
-            compileBtn.innerHTML = '<span><div class="spinner"></div>Compiling...</span>';
-            clearStatus('compileStatus');
-            
-            logToConsole('🔨 Starting compilation...', 'info');
-            logToConsole(`Repository: ${config.username}/${config.repo}`, 'info');
-
-            try {
-                const response = await fetch(
-                    `https://api.github.com/repos/${config.username}/${config.repo}/dispatches`,
-                    {
+                try {
+                    const response = await fetch('/api/compile', {
                         method: 'POST',
                         headers: {
-                            'Authorization': `token ${config.token}`,
-                            'Accept': 'application/vnd.github.v3+json',
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            event_type: 'compile_cmd',
-                            client_payload: {
-                                code: code,
-                                timestamp: new Date().toISOString()
-                            }
+                            code: code
                         })
-                    }
-                );
+                    });
 
-                if (response.status === 204) {
-                    showStatus('compileStatus', 'Compilation triggered successfully!', 'success');
-                    logToConsole('✓ Compilation request sent to GitHub Actions', 'success');
-                    logToConsole('Check your repository Actions tab for build status', 'info');
-                } else {
-                    const error = await response.text();
-                    throw new Error(`GitHub API error: ${response.status} - ${error}`);
+                    const result = await response.json();
+
+                    if (result.success) {
+                        showStatus('compileStatus', 'Compilation triggered successfully!', 'success');
+                        logToConsole('✓ Compilation request sent to GitHub Actions', 'success');
+                        logToConsole('Check your repository Actions tab for build status', 'info');
+                        logToConsole(`Timestamp: ${result.timestamp}`, 'info');
+                    } else {
+                        throw new Error(result.error || 'Unknown error occurred');
+                    }
+                } catch (error) {
+                    showStatus('compileStatus', 'Compilation failed', 'error');
+                    logToConsole(`✗ Error: ${error.message}`, 'error');
+                    console.error(error);
+                } finally {
+                    compileBtn.disabled = false;
+                    compileBtn.innerHTML = '<span>🔨 Compile</span>';
                 }
-            } catch (error) {
-                showStatus('compileStatus', 'Compilation failed', 'error');
-                logToConsole(`✗ Error: ${error.message}`, 'error');
-                console.error(error);
-            } finally {
-                compileBtn.disabled = false;
-                compileBtn.innerHTML = '<span>🔨 Compile</span>';
-            }
         }
 
         // Flash Arduino
