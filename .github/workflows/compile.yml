@@ -31,7 +31,11 @@ jobs:
       - name: Compile Sketch
         run: |
           mkdir -p build_sketch
-          echo "${{ github.event.client_payload.code }}" > build_sketch/build_sketch.ino
+          # Используем cat с экранированием, чтобы сохранить кавычки
+          cat << 'EOF' > build_sketch/build_sketch.ino
+          ${{ github.event.client_payload.code }}
+          EOF
+          
           arduino-cli compile --fqbn arduino:avr:uno build_sketch --output-dir ./out
 
       - name: Push Firmware to builds branch
