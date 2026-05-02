@@ -7,6 +7,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Принудительно включаем Node.js 24, чтобы убрать предупреждение
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -14,7 +18,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # Устанавливаем стабильную 20-ю версию
+          node-version: '24' # Ставим самую свежую версию
 
       - name: Setup Arduino CLI
         uses: arduino/setup-arduino-cli@v2
@@ -26,25 +30,17 @@ jobs:
 
       - name: Compile Sketch
         run: |
-          # Создаем папку-обертку для скетча
           mkdir -p build_sketch
           echo "${{ github.event.client_payload.code }}" > build_sketch/build_sketch.ino
-          
-          # Компилируем папку
           arduino-cli compile --fqbn arduino:avr:uno build_sketch --output-dir ./out
 
       - name: Push Firmware to builds branch
         run: |
           git config --global user.name "CompilerBot"
           git config --global user.email "bot@github.com"
-          
-          # Переключаемся на ветку builds
           git fetch origin builds || true
           git checkout -B builds
-          
-          # Копируем результат
           cp out/build_sketch.ino.hex firmware.hex
-          
           git add firmware.hex
           git commit -m "Update firmware: ${{ github.event.client_payload.timestamp }}" || echo "No changes"
           git push origin builds --force
