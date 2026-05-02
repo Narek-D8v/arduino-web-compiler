@@ -1,4 +1,5 @@
 name: Arduino Remote Compile
+
 on:
   repository_dispatch:
     types: [compile_cmd]
@@ -7,26 +8,43 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout builds branch
+      - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          ref: builds
+          node-version: '20' # Устанавливаем стабильную 20-ю версию
 
       - name: Setup Arduino CLI
-        uses: arduino/setup-arduino-cli@v1
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Install platform
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr
 
       - name: Compile Sketch
         run: |
-          echo "${{ github.event.client_payload.code }}" > sketch.ino
-          arduino-cli core update-index
-          arduino-cli core install arduino:avr
-          arduino-cli compile --fqbn arduino:avr:uno sketch.ino --output-dir ./out
+          # Создаем папку-обертку для скетча
+          mkdir -p build_sketch
+          echo "${{ github.event.client_payload.code }}" > build_sketch/build_sketch.ino
+          
+          # Компилируем папку
+          arduino-cli compile --fqbn arduino:avr:uno build_sketch --output-dir ./out
 
-      - name: Push Firmware
+      - name: Push Firmware to builds branch
         run: |
           git config --global user.name "CompilerBot"
           git config --global user.email "bot@github.com"
-          mv out/sketch.ino.hex firmware.hex
+          
+          # Переключаемся на ветку builds
+          git fetch origin builds || true
+          git checkout -B builds
+          
+          # Копируем результат
+          cp out/build_sketch.ino.hex firmware.hex
+          
           git add firmware.hex
-          git commit -m "Build: ${{ github.event.client_payload.filename }}" || echo "No changes"
+          git commit -m "Update firmware: ${{ github.event.client_payload.timestamp }}" || echo "No changes"
           git push origin builds --force
