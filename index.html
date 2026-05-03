@@ -335,6 +335,122 @@
                 font-size: 0.85rem;
             }
         }
+
+        /* Library Manager */
+        .lib-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.3rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            background: rgba(0,255,136,0.08);
+            border: 1px solid rgba(0,255,136,0.2);
+            color: var(--accent-primary);
+            cursor: default;
+            transition: all 0.2s;
+        }
+
+        .lib-badge .remove-lib {
+            cursor: pointer;
+            opacity: 0.6;
+            font-size: 0.9rem;
+            line-height: 1;
+            transition: opacity 0.2s;
+        }
+
+        .lib-badge .remove-lib:hover { opacity: 1; }
+
+        .lib-card {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1rem;
+            transition: all 0.25s;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .lib-card:hover {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 18px rgba(0,255,136,0.12);
+            transform: translateY(-1px);
+        }
+
+        .lib-card.installed {
+            border-color: rgba(0,255,136,0.4);
+            background: rgba(0,255,136,0.04);
+        }
+
+        .lib-card .lib-tag {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            background: rgba(0,153,255,0.15);
+            color: var(--accent-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .lib-search {
+            width: 100%;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.65rem 1rem;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+            transition: all 0.3s;
+        }
+
+        .lib-search:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(0,255,136,0.1);
+        }
+
+        .tab-btn {
+            padding: 0.5rem 1.25rem;
+            border-radius: 6px;
+            font-family: 'Syne', sans-serif;
+            font-weight: 700;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+            background: transparent;
+            color: var(--text-secondary);
+        }
+
+        .tab-btn.active {
+            background: rgba(0,255,136,0.12);
+            color: var(--accent-primary);
+        }
+
+        .tab-btn:hover:not(.active) {
+            color: var(--text-primary);
+        }
+
+        .drop-zone {
+            border: 2px dashed var(--border-color);
+            border-radius: 10px;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .drop-zone.drag-over, .drop-zone:hover {
+            border-color: var(--accent-primary);
+            background: rgba(0,255,136,0.04);
+        }
     </style>
 </head>
 <body>
@@ -359,6 +475,9 @@
             <div class="flex justify-between items-center mb-6">
                 <h2 class="text-xl font-bold text-accent-secondary" style="font-family: 'Syne', sans-serif;">Code Editor</h2>
                 <div class="flex gap-3">
+                    <button class="btn btn-secondary" onclick="toggleLibraryManager()">
+                        <span>📦 Libraries</span>
+                    </button>
                     <button class="btn btn-secondary" onclick="clearEditor()">
                         <span>Clear</span>
                     </button>
@@ -368,6 +487,64 @@
                 </div>
             </div>
             <div id="editor-container"></div>
+        </div>
+
+        <!-- Library Manager Panel -->
+        <div id="libraryPanel" class="card mb-8" style="display:none;">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-accent-primary" style="font-family: 'Syne', sans-serif;">📦 Library Manager</h2>
+                <button class="btn btn-secondary" onclick="toggleLibraryManager()"><span>✕ Close</span></button>
+            </div>
+
+            <!-- Installed Libraries -->
+            <div class="mb-6">
+                <label class="label mb-3">Installed Libraries</label>
+                <div id="installedLibraries" class="flex flex-wrap gap-2 min-h-10">
+                    <span class="text-text-secondary text-sm" id="noLibsMsg">No libraries added yet</span>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex gap-2 mb-5" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
+                <button class="tab-btn active" onclick="switchLibTab('popular', this)">Popular</button>
+                <button class="tab-btn" onclick="switchLibTab('search', this)">Search</button>
+                <button class="tab-btn" onclick="switchLibTab('import', this)">Import ZIP / URL</button>
+            </div>
+
+            <!-- Popular Tab -->
+            <div id="tab-popular">
+                <div id="popularLibGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+            </div>
+
+            <!-- Search Tab -->
+            <div id="tab-search" style="display:none;">
+                <input type="text" id="libSearchInput" class="lib-search mb-4" placeholder="Search libraries... (e.g. Servo, NeoPixel, DHT)">
+                <div id="searchLibGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+            </div>
+
+            <!-- Import Tab -->
+            <div id="tab-import" style="display:none;">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- ZIP Upload -->
+                    <div>
+                        <label class="label mb-3">Upload ZIP Archive</label>
+                        <div class="drop-zone" id="dropZone" onclick="document.getElementById('zipInput').click()">
+                            <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">📁</div>
+                            <p class="text-text-primary font-bold mb-1">Click or drag & drop</p>
+                            <p class="text-text-secondary text-sm">Arduino library .zip files</p>
+                            <input type="file" id="zipInput" accept=".zip" style="display:none;" onchange="importLibraryZip(this)">
+                        </div>
+                    </div>
+                    <!-- URL Import -->
+                    <div>
+                        <label class="label mb-3">Add by Include Line</label>
+                        <p class="text-text-secondary text-sm mb-3">Paste an <code style="color:var(--accent-primary)">#include</code> line or just the library name to add it to your sketch header.</p>
+                        <input type="text" id="customLibUrl" class="input-field mb-3" placeholder='e.g.  #include &lt;MyLib.h&gt;  or  MyLib'>
+                        <button class="btn btn-primary w-full" onclick="addCustomInclude()"><span>➕ Add Include</span></button>
+                        <div id="importStatus" class="mt-3"></div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Actions Section -->
@@ -1418,7 +1595,234 @@ void loop() {
             logToConsole('✓ Web Serial API is available', 'success');
         }
 
-        // Keyboard shortcuts
+        // ─── Library Manager ─────────────────────────────────────────────────────
+
+        const POPULAR_LIBRARIES = [
+            { name: 'Servo',           header: 'Servo.h',           tag: 'Actuators',   desc: 'Control servo motors with precise angle positioning.' },
+            { name: 'Wire',            header: 'Wire.h',            tag: 'I2C',         desc: 'I²C/TWI communication between devices.' },
+            { name: 'SPI',             header: 'SPI.h',             tag: 'SPI',         desc: 'Serial Peripheral Interface bus communication.' },
+            { name: 'EEPROM',          header: 'EEPROM.h',          tag: 'Storage',     desc: 'Read/write data to non-volatile EEPROM memory.' },
+            { name: 'SD',              header: 'SD.h',              tag: 'Storage',     desc: 'Read and write files on SD cards.' },
+            { name: 'Adafruit NeoPixel', header: 'Adafruit_NeoPixel.h', tag: 'LEDs',   desc: 'Drive WS2812/NeoPixel RGB LED strips.' },
+            { name: 'DHT sensor',      header: 'DHT.h',             tag: 'Sensors',     desc: 'DHT11/DHT22 temperature & humidity sensors.' },
+            { name: 'LiquidCrystal',   header: 'LiquidCrystal.h',   tag: 'Display',     desc: 'Interface with HD44780-compatible LCD displays.' },
+            { name: 'LiquidCrystal I2C', header: 'LiquidCrystal_I2C.h', tag: 'Display', desc: 'LCD display via I²C expander (PCF8574).' },
+            { name: 'U8g2',            header: 'U8g2lib.h',         tag: 'Display',     desc: 'Monochrome display library (OLED, LCD).' },
+            { name: 'Adafruit GFX',    header: 'Adafruit_GFX.h',    tag: 'Display',     desc: 'Core graphics library for Adafruit displays.' },
+            { name: 'Adafruit SSD1306', header: 'Adafruit_SSD1306.h', tag: 'Display',  desc: 'SSD1306 128×64 OLED display driver.' },
+            { name: 'TFT_eSPI',        header: 'TFT_eSPI.h',        tag: 'Display',     desc: 'Fast TFT display library optimised for ESP32.' },
+            { name: 'FastLED',         header: 'FastLED.h',         tag: 'LEDs',        desc: 'High-performance LED strip animation library.' },
+            { name: 'Stepper',         header: 'Stepper.h',         tag: 'Actuators',   desc: 'Drive unipolar and bipolar stepper motors.' },
+            { name: 'AccelStepper',    header: 'AccelStepper.h',    tag: 'Actuators',   desc: 'Stepper motor with acceleration and deceleration.' },
+            { name: 'IRremote',        header: 'IRremote.h',        tag: 'Wireless',    desc: 'Send and receive infrared remote control signals.' },
+            { name: 'RF24',            header: 'RF24.h',            tag: 'Wireless',    desc: 'nRF24L01 2.4GHz wireless transceiver driver.' },
+            { name: 'WiFi (ESP32)',    header: 'WiFi.h',            tag: 'Network',     desc: 'Wi-Fi connection for ESP32/ESP8266 boards.' },
+            { name: 'WebServer',       header: 'WebServer.h',       tag: 'Network',     desc: 'Simple HTTP server for ESP32.' },
+            { name: 'HTTPClient',      header: 'HTTPClient.h',      tag: 'Network',     desc: 'HTTP GET/POST client for ESP32/ESP8266.' },
+            { name: 'ArduinoJson',     header: 'ArduinoJson.h',     tag: 'Data',        desc: 'JSON serialization/deserialization library.' },
+            { name: 'PubSubClient',    header: 'PubSubClient.h',    tag: 'Network',     desc: 'MQTT client for publish/subscribe messaging.' },
+            { name: 'Ticker',          header: 'Ticker.h',          tag: 'Timing',      desc: 'Call functions repeatedly at set intervals.' },
+            { name: 'TimerOne',        header: 'TimerOne.h',        tag: 'Timing',      desc: 'Hardware timer-based interrupts for AVR.' },
+            { name: 'OneWire',         header: 'OneWire.h',         tag: 'Sensors',     desc: '1-Wire protocol for Dallas/Maxim sensors.' },
+            { name: 'DallasTemperature', header: 'DallasTemperature.h', tag: 'Sensors', desc: 'DS18B20 digital temperature sensor library.' },
+            { name: 'MPU6050',         header: 'MPU6050.h',         tag: 'Sensors',     desc: 'IMU gyroscope & accelerometer (I²C).' },
+            { name: 'Adafruit BME280', header: 'Adafruit_BME280.h', tag: 'Sensors',     desc: 'BME280 pressure, humidity & temperature sensor.' },
+            { name: 'Adafruit BMP280', header: 'Adafruit_BMP280.h', tag: 'Sensors',     desc: 'BMP280 barometric pressure sensor.' },
+            { name: 'Ultrasonic',      header: 'Ultrasonic.h',      tag: 'Sensors',     desc: 'HC-SR04 ultrasonic distance measurement.' },
+            { name: 'Keypad',          header: 'Keypad.h',          tag: 'Input',       desc: 'Matrix keypad scanning library.' },
+            { name: 'RotaryEncoder',   header: 'RotaryEncoder.h',   tag: 'Input',       desc: 'Read mechanical rotary encoder position.' },
+            { name: 'Bounce2',         header: 'Bounce2.h',         tag: 'Input',       desc: 'Debounce buttons and switches reliably.' },
+            { name: 'Keyboard',        header: 'Keyboard.h',        tag: 'HID',         desc: 'USB HID keyboard emulation (Leonardo/Pro Micro).' },
+            { name: 'Mouse',           header: 'Mouse.h',           tag: 'HID',         desc: 'USB HID mouse emulation (Leonardo/Pro Micro).' },
+            { name: 'SoftwareSerial',  header: 'SoftwareSerial.h',  tag: 'UART',        desc: 'Software-emulated serial port on any pins.' },
+            { name: 'MFRC522',         header: 'MFRC522.h',         tag: 'RFID',        desc: 'RFID/NFC reader module (SPI).' },
+            { name: 'TinyGPS++',       header: 'TinyGPS++.h',       tag: 'GPS',         desc: 'Parse NMEA sentences from GPS modules.' },
+            { name: 'Ethernet',        header: 'Ethernet.h',        tag: 'Network',     desc: 'W5100/W5500 Ethernet shield library.' },
+        ];
+
+        // Installed libraries state
+        let installedLibs = JSON.parse(localStorage.getItem('arduino_libs') || '[]');
+
+        function saveLibs() {
+            localStorage.setItem('arduino_libs', JSON.stringify(installedLibs));
+        }
+
+        function toggleLibraryManager() {
+            const panel = document.getElementById('libraryPanel');
+            const open  = panel.style.display === 'none';
+            panel.style.display = open ? 'block' : 'none';
+            if (open) {
+                renderInstalledBadges();
+                renderPopularLibs(POPULAR_LIBRARIES);
+                initLibSearch();
+            }
+        }
+
+        function switchLibTab(name, btn) {
+            ['popular','search','import'].forEach(t => {
+                document.getElementById('tab-' + t).style.display = 'none';
+            });
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('tab-' + name).style.display = 'block';
+            btn.classList.add('active');
+        }
+
+        function isInstalled(header) {
+            return installedLibs.some(l => l.header === header);
+        }
+
+        function renderInstalledBadges() {
+            const container = document.getElementById('installedLibraries');
+            const msg       = document.getElementById('noLibsMsg');
+            container.innerHTML = '';
+            if (installedLibs.length === 0) {
+                container.appendChild(Object.assign(document.createElement('span'), {
+                    className: 'text-text-secondary text-sm',
+                    textContent: 'No libraries added yet'
+                }));
+                return;
+            }
+            installedLibs.forEach(lib => {
+                const badge = document.createElement('span');
+                badge.className = 'lib-badge';
+                badge.innerHTML = `${lib.name} <span class="remove-lib" onclick="removeLibrary('${lib.header}')" title="Remove">✕</span>`;
+                container.appendChild(badge);
+            });
+        }
+
+        function installLibrary(lib) {
+            if (isInstalled(lib.header)) return;
+            installedLibs.push(lib);
+            saveLibs();
+            injectInclude(lib.header);
+            renderInstalledBadges();
+            renderPopularLibs(POPULAR_LIBRARIES);
+            renderSearchResults(document.getElementById('libSearchInput')?.value || '');
+            logToConsole(`📦 Library added: #include <${lib.header}>`, 'success');
+        }
+
+        function removeLibrary(header) {
+            installedLibs = installedLibs.filter(l => l.header !== header);
+            saveLibs();
+            removeInclude(header);
+            renderInstalledBadges();
+            renderPopularLibs(POPULAR_LIBRARIES);
+            renderSearchResults(document.getElementById('libSearchInput')?.value || '');
+            logToConsole(`🗑 Library removed: ${header}`, 'warning');
+        }
+
+        function injectInclude(header) {
+            const code    = editor.getValue();
+            const line    = `#include <${header}>`;
+            if (code.includes(line)) return;
+            // Insert after last existing #include, or at very top
+            const lines   = code.split('\n');
+            let lastInclude = -1;
+            lines.forEach((l, i) => { if (l.trim().startsWith('#include')) lastInclude = i; });
+            lines.splice(lastInclude + 1, 0, line);
+            editor.setValue(lines.join('\n'));
+        }
+
+        function removeInclude(header) {
+            const line = `#include <${header}>`;
+            const code = editor.getValue().split('\n').filter(l => l.trim() !== line).join('\n');
+            editor.setValue(code);
+        }
+
+        function libCardHTML(lib) {
+            const installed = isInstalled(lib.header);
+            return `
+                <div class="lib-card ${installed ? 'installed' : ''}" onclick="${installed ? `removeLibrary('${lib.header}')` : `installLibrary(${JSON.stringify(lib).replace(/"/g, '&quot;')})`}">
+                    <span class="lib-tag">${lib.tag}</span>
+                    <div class="flex justify-between items-start">
+                        <p class="font-bold text-sm mb-1" style="font-family:'Syne',sans-serif;">${lib.name}</p>
+                        <span style="font-size:1.1rem">${installed ? '✅' : '➕'}</span>
+                    </div>
+                    <p class="text-text-secondary" style="font-size:0.78rem;line-height:1.4;">${lib.desc}</p>
+                    <p style="font-size:0.7rem;color:var(--accent-secondary);margin-top:0.4rem;">${lib.header}</p>
+                </div>`;
+        }
+
+        function renderPopularLibs(list) {
+            document.getElementById('popularLibGrid').innerHTML = list.map(libCardHTML).join('');
+        }
+
+        function renderSearchResults(query) {
+            const q   = query.toLowerCase().trim();
+            const grid = document.getElementById('searchLibGrid');
+            if (!q) { grid.innerHTML = '<p class="text-text-secondary text-sm">Type to search libraries…</p>'; return; }
+            const res = POPULAR_LIBRARIES.filter(l =>
+                l.name.toLowerCase().includes(q) ||
+                l.header.toLowerCase().includes(q) ||
+                l.tag.toLowerCase().includes(q) ||
+                l.desc.toLowerCase().includes(q)
+            );
+            grid.innerHTML = res.length
+                ? res.map(libCardHTML).join('')
+                : '<p class="text-text-secondary text-sm">No libraries found. Try the Import tab to add a custom one.</p>';
+        }
+
+        function initLibSearch() {
+            const input = document.getElementById('libSearchInput');
+            if (input._bound) return;
+            input._bound = true;
+            input.addEventListener('input', e => renderSearchResults(e.target.value));
+        }
+
+        // ZIP import
+        function importLibraryZip(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const name   = file.name.replace(/\.zip$/i, '');
+            const header = name + '.h';
+            const lib    = { name, header, tag: 'Custom', desc: `Imported from ${file.name}` };
+            installLibrary(lib);
+            showStatus('importStatus', `Imported: ${file.name}`, 'success');
+            logToConsole(`📁 Custom library imported: ${file.name}`, 'success');
+            logToConsole('⚠ Remember to also upload the ZIP to your GitHub Actions build environment.', 'warning');
+            input.value = '';
+        }
+
+        // Custom include line
+        function addCustomInclude() {
+            let val = document.getElementById('customLibUrl').value.trim();
+            if (!val) return;
+            // Accept "#include <Foo.h>", "<Foo.h>", "Foo.h", or just "Foo"
+            let header = val.replace(/^#include\s*/i, '').replace(/[<>"]/g, '').trim();
+            if (!header.endsWith('.h')) header += '.h';
+            const name = header.replace(/\.h$/i, '');
+            if (isInstalled(header)) {
+                showStatus('importStatus', `${header} already added`, 'warning');
+                return;
+            }
+            const lib = { name, header, tag: 'Custom', desc: 'Manually added include.' };
+            installLibrary(lib);
+            document.getElementById('customLibUrl').value = '';
+            showStatus('importStatus', `Added: #include <${header}>`, 'success');
+        }
+
+        // Drag-and-drop on drop zone
+        window.addEventListener('DOMContentLoaded', () => {
+            const dz = document.getElementById('dropZone');
+            if (!dz) return;
+            dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
+            dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+            dz.addEventListener('drop', e => {
+                e.preventDefault();
+                dz.classList.remove('drag-over');
+                const file = e.dataTransfer.files[0];
+                if (file && file.name.endsWith('.zip')) {
+                    importLibraryZip({ files: [file] });
+                }
+            });
+        });
+
+        // Restore installed libraries into editor on load
+        window.addEventListener('load', () => {
+            // Re-inject on editor ready — handled by Monaco onDidChangeModel / initial value
+        });
+
+        // ─── Keyboard shortcuts ──────────────────────────────────────────────────
         window.addEventListener('keydown', (e) => {
             // Ctrl/Cmd + Enter to compile
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
