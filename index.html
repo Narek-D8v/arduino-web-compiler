@@ -1769,17 +1769,52 @@ void loop() {
             input.addEventListener('input', e => renderSearchResults(e.target.value));
         }
 
-        // ZIP import
-        function importLibraryZip(input) {
+        // ZIP import — автоматически пушит в /libraries/ репозитория
+        async function importLibraryZip(input) {
             const file = input.files[0];
             if (!file) return;
+
             const name   = file.name.replace(/\.zip$/i, '');
             const header = name + '.h';
             const lib    = { name, header, tag: 'Custom', desc: `Imported from ${file.name}` };
-            installLibrary(lib);
-            showStatus('importStatus', `Imported: ${file.name}`, 'success');
-            logToConsole(`📁 Custom library imported: ${file.name}`, 'success');
-            logToConsole('⚠ Remember to also upload the ZIP to your GitHub Actions build environment.', 'warning');
+
+            showStatus('importStatus', 'Uploading to repository...', 'info');
+            logToConsole(`📁 Uploading library "${file.name}" to GitHub...`, 'info');
+
+            try {
+                // Читаем файл как base64
+                const base64 = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload  = () => resolve(reader.result.split(',')[1]);
+                    reader.onerror = () => reject(new Error('Failed to read file'));
+                    reader.readAsDataURL(file);
+                });
+
+                // Пушим через Vercel API
+                const response = await fetch('/api/upload-library', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: file.name, content: base64 })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    installLibrary(lib);
+                    const action = result.updated ? 'updated' : 'uploaded';
+                    showStatus('importStatus', `✓ Library ${action}: ${file.name}`, 'success');
+                    logToConsole(`✓ "${file.name}" ${action} to /libraries/ in repository`, 'success');
+                    logToConsole(`📦 Added: #include <${header}>`, 'success');
+                } else {
+                    throw new Error(result.error || 'Upload failed');
+                }
+
+            } catch (error) {
+                showStatus('importStatus', `Upload failed: ${error.message}`, 'error');
+                logToConsole(`✗ Failed to upload library: ${error.message}`, 'error');
+                logToConsole('You can manually add the ZIP to /libraries/ in your repository.', 'warning');
+            }
+
             input.value = '';
         }
 
