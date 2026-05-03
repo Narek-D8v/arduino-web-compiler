@@ -38,6 +38,10 @@ jobs:
 
       - name: Install & Sync Libraries
         run: |
+          # Включаем поддержку установки из ZIP
+          arduino-cli config init --force
+          arduino-cli config set library.enable_unsafe_install true
+          
           arduino-cli lib update-index
           LIBS_PATH="$HOME/Arduino/libraries"
           mkdir -p "$LIBS_PATH"
@@ -47,7 +51,7 @@ jobs:
           if [ -d "$CUSTOM_DIR" ]; then
             echo "🔍 Checking for custom components in /$CUSTOM_DIR..."
             
-            # Обработка одиночных .h файлов (например, Animation.h)
+            # Обработка одиночных .h файлов
             for H_FILE in "$CUSTOM_DIR"/*.h; do
               [ -f "$H_FILE" ] || continue
               LIB_NAME=$(basename "$H_FILE" .h)
@@ -56,7 +60,7 @@ jobs:
               cp "$H_FILE" "$LIBS_PATH/$LIB_NAME/"
             done
 
-            # Установка ZIP-архивов
+            # Установка ZIP-архивов (теперь это сработает!)
             for ZIP in "$CUSTOM_DIR"/*.zip; do
               [ -f "$ZIP" ] || continue
               echo "📦 Installing ZIP: $(basename "$ZIP")"
@@ -71,7 +75,7 @@ jobs:
             done
           fi
 
-          # Авто-установка стандартных библиотек по #include из скетча
+          # Авто-установка стандартных библиотек по #include
           SKETCH="build_sketch/build_sketch.ino"
           INCLUDES=$(grep -oP '(?<=#include\s[<"])[\w./]+\.h' "$SKETCH" || true)
           
