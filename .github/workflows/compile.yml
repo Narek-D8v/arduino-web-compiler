@@ -1,5 +1,6 @@
 name: Arduino Remote Compile[cite: 3]
 
+# 1. ТРИГГЕРЫ: Ожидание команды от Vercel/API
 on:
   repository_dispatch:
     types: [compile_cmd][cite: 3]
@@ -11,6 +12,7 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true[cite: 3]
 
     steps:
+      # --- ПОДГОТОВКА ОКРУЖЕНИЯ ---
       - name: Checkout code[cite: 3]
         uses: actions/checkout@v4[cite: 3]
         with:
@@ -24,107 +26,87 @@ jobs:
       - name: Setup Arduino CLI[cite: 3]
         uses: arduino/setup-arduino-cli@v2[cite: 3]
 
-      - name: Install AVR platform[cite: 3]
+      - name: Install AVR Platform[cite: 3]
         run: |
           arduino-cli core update-index
           arduino-cli core install arduino:avr
 
-      - name: Write Sketch[cite: 3]
+      # --- ПОДГОТОВКА СКЕТЧА ---
+      - name: Write Sketch File[cite: 3]
         run: |
           mkdir -p build_sketch
           cat << 'ARDUINO_SKETCH_END' > build_sketch/build_sketch.ino[cite: 3]
           ${{ github.event.client_payload.code }}[cite: 3]
           ARDUINO_SKETCH_END[cite: 3]
 
-      - name: Install Libraries[cite: 3]
+      # --- УПРАВЛЕНИЕ БИБЛИОТЕКАМИ ---
+      - name: Install & Sync Libraries[cite: 3]
         run: |
           arduino-cli lib update-index[cite: 3]
+          LIBS_PATH="$HOME/Arduino/libraries"
+          mkdir -p "$LIBS_PATH"[cite: 3]
+          
+          CUSTOM_DIR="libraries"[cite: 3]
 
-          ARDUINO_LIBS_DIR="$HOME/Arduino/libraries"[cite: 3]
-          mkdir -p "$ARDUINO_LIBS_DIR"[cite: 3]
-
-          # ── 1. Кастомные библиотеки из /libraries/ в репозитории ─────────────
-          CUSTOM_LIBS_DIR="libraries"[cite: 3]
-
-          if [ -d "$CUSTOM_LIBS_DIR" ]; then[cite: 3]
-            # ОБРАБОТКА ОДИНОЧНЫХ .H ФАЙЛОВ (Исправление для Animation.h)
-            for HEADER_PATH in "$CUSTOM_LIBS_DIR"/*.h; do
-              [ -f "$HEADER_PATH" ] || continue
-              LIB_NAME=$(basename "$HEADER_PATH" .h)
-              echo "📄 Found loose header: $LIB_NAME.h"
-              mkdir -p "$ARDUINO_LIBS_DIR/$LIB_NAME"
-              cp "$HEADER_PATH" "$ARDUINO_LIBS_DIR/$LIB_NAME/"
-              echo "✓ Created library folder for: $LIB_NAME"
+          if [ -d "$CUSTOM_DIR" ]; then[cite: 3]
+            echo "🔍 Checking for custom components in /$CUSTOM_DIR..."
+            
+            # Обработка одиночных .h файлов (для Animation.h)
+            for H_FILE in "$CUSTOM_DIR"/*.h; do
+              [ -f "$H_FILE" ] || continue
+              LIB_NAME=$(basename "$H_FILE" .h)
+              echo "📄 Installing loose header: $LIB_NAME"
+              mkdir -p "$LIBS_PATH/$LIB_NAME"
+              cp "$H_FILE" "$LIBS_PATH/$LIB_NAME/"
             done
 
-            # ZIP-файлы[cite: 3]
-            for ZIP_PATH in "$CUSTOM_LIBS_DIR"/*.zip; do[cite: 3]
-              [ -f "$ZIP_PATH" ] || continue[cite: 3]
-              echo "📦 Installing ZIP library: $ZIP_PATH"[cite: 3]
-              arduino-cli lib install --zip-path "$ZIP_PATH"[cite: 3]
+            # Установка ZIP-архивов[cite: 3]
+            for ZIP in "$CUSTOM_DIR"/*.zip; do
+              [ -f "$ZIP" ] || continue
+              echo "📦 Installing ZIP: $(basename "$ZIP")"[cite: 3]
+              arduino-cli lib install --zip-path "$ZIP"[cite: 3]
             done
 
-            # Папки с библиотеками (распакованные)[cite: 3]
-            for LIB_PATH in "$CUSTOM_LIBS_DIR"/*/; do[cite: 3]
-              [ -d "$LIB_PATH" ] || continue[cite: 3]
-              LIB_NAME=$(basename "$LIB_PATH")[cite: 3]
-              echo "📂 Copying custom library folder: $LIB_NAME"[cite: 3]
-              cp -r "$LIB_PATH" "$ARDUINO_LIBS_DIR/$LIB_NAME"[cite: 3]
+            # Копирование готовых папок библиотек[cite: 3]
+            for DIR in "$CUSTOM_DIR"/*/; do
+              [ -d "$DIR" ] || continue
+              echo "📂 Copying folder: $(basename "$DIR")"[cite: 3]
+              cp -r "$DIR" "$LIBS_PATH/"[cite: 3]
             done
-          else
-            echo "No /libraries directory found — skipping custom libs"[cite: 3]
           fi
 
-          # ── 2. Известные библиотеки из Arduino Library Manager ───────────────
-          declare -A LIB_MAP=([cite: 3]
-            ["Servo.h"]="Servo" ["Wire.h"]="Wire" ["SPI.h"]="SPI"[cite: 3]
-            ["Adafruit_GFX.h"]="Adafruit GFX Library"[cite: 3]
-            ["Adafruit_SSD1306.h"]="Adafruit SSD1306"[cite: 3]
-            ["DHT.h"]="DHT sensor library" ["LiquidCrystal_I2C.h"]="LiquidCrystal I2C"[cite: 3]
-          )
-
-          # Извлекаем все #include из скетча[cite: 3]
-          SKETCH="build_sketch/build_sketch.ino"[cite: 3]
+          # Авто-установка библиотек по #include из кода[cite: 3]
+          # (Здесь используется твоя логика LIB_MAP из compile_2.yml)[cite: 3]
+          SKETCH="build_sketch/build_sketch.ino"
           INCLUDES=$(grep -oP '(?<=#include\s[<"])[\w./]+\.h' "$SKETCH" || true)[cite: 3]
-
-          for HEADER in $INCLUDES; do[cite: 3]
-            case "$HEADER" in[cite: 3]
-              Arduino.h|avr/*.h|util/*.h|pgmspace.h|interrupt.h) continue ;;[cite: 3]
-            esac
-
-            HEADER_NAME="${HEADER%.h}"[cite: 3]
-            if [ -d "$ARDUINO_LIBS_DIR/$HEADER_NAME" ]; then[cite: 3]
-              echo "Skipping $HEADER — already installed"[cite: 3]
-              continue[cite: 3]
-            fi
-
-            if [[ -n "${LIB_MAP[$HEADER]+_}" ]]; then[cite: 3]
-              LIB_NAME="${LIB_MAP[$HEADER]}"[cite: 3]
-              arduino-cli lib install "$LIB_NAME"[cite: 3]
-            else
-              LIB_GUESS="${HEADER%.h}"[cite: 3]
-              arduino-cli lib install "$LIB_GUESS" || echo "⚠ $LIB_GUESS not found"[cite: 3]
+          
+          for H in $INCLUDES; do[cite: 3]
+            case "$H" in Arduino.h|avr/*.h|util/*.h|pgmspace.h|interrupt.h) continue ;; esac[cite: 3]
+            
+            LIB_G="${H%.h}"
+            if [ ! -d "$LIBS_PATH/$LIB_G" ]; then
+              echo "📥 Auto-installing: $LIB_G"[cite: 3]
+              arduino-cli lib install "$LIB_G" || echo "⚠️ $LIB_G not found"[cite: 3]
             fi
           done
 
-      - name: Compile Sketch[cite: 3]
+      # --- КОМПИЛЯЦИЯ ---
+      - name: Run Compiler[cite: 3]
         run: |
-          echo "🔨 Compiling for Arduino Uno..."[cite: 3]
-          arduino-cli compile \
-            --fqbn arduino:avr:uno \
-            --output-dir ./out \
-            build_sketch[cite: 3]
+          echo "🔨 Starting build for Arduino Uno..."[cite: 3]
+          arduino-cli compile --fqbn arduino:avr:uno --output-dir ./out build_sketch[cite: 3]
 
-      - name: Push Firmware to builds branch[cite: 3]
+      # --- ПУБЛИКАЦИЯ РЕЗУЛЬТАТА ---
+      - name: Push Firmware to Builds[cite: 3]
         run: |
           git config --global user.name "GitHub Actions Bot"[cite: 3]
           git config --global user.email "actions@github.com"[cite: 3]
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}[cite: 3]
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@[github.com/$](https://github.com/$){{ github.repository }}[cite: 3]
 
           git fetch origin builds || true[cite: 3]
           git checkout -B builds[cite: 3]
 
           cp out/build_sketch.ino.hex firmware.hex[cite: 3]
           git add firmware.hex[cite: 3]
-          git commit -m "firmware: ${{ github.event.client_payload.timestamp }}" || echo "No changes"[cite: 3]
+          git commit -m "Build: ${{ github.event.client_payload.timestamp }}" || echo "No changes"[cite: 3]
           git push origin builds --force[cite: 3]
