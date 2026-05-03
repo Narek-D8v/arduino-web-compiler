@@ -8,7 +8,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/avrgirl-arduino@latest/dist/avrgirl-arduino.global.js"></script>
     <style>
         :root {
             --bg-primary: #0a0e17;
@@ -480,8 +479,8 @@
     <!-- Monaco Editor -->
     <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs/loader.js"></script>
     
-    <!-- AVRGirl Arduino -->
-    <script src="https://cdn.jsdelivr.net/npm/avrgirl-arduino@3.0.0/dist/avrgirl-arduino.min.js"></script>
+    <!-- AVRGirl Arduino (browser build) -->
+    <script src="https://unpkg.com/avrgirl-arduino@latest/dist/avrgirl-arduino.global.js"></script>
 
     <!-- ESPTool for ESP32 -->
     <script src="https://unpkg.com/esptool-js@0.4.0/bundle.js"></script>
@@ -939,113 +938,293 @@ void loop() {
             }
         }
 
-        // Flash Arduino
-        async function flashArduino() {
-                if (!serialPort) {
-                    showStatus('flashStatus', 'Please connect to board first', 'error');
-                    logToConsole('✗ No serial port connected. Click "Connect to Board" first.', 'error');
-                    return;
+        // ─── Intel HEX parser ────────────────────────────────────────────────────
+        function parseIntelHex(hexText) {
+            const pages = [];
+            let baseAddr = 0;
+
+            for (const rawLine of hexText.split('\n')) {
+                const line = rawLine.trim();
+                if (!line.startsWith(':')) continue;
+
+                const bytes     = line.slice(1).match(/.{2}/g).map(b => parseInt(b, 16));
+                const byteCount = bytes[0];
+                const addr      = (bytes[1] << 8) | bytes[2];
+                const recType   = bytes[3];
+                const data      = bytes.slice(4, 4 + byteCount);
+
+                if (recType === 0x00) {                         // data record
+                    pages.push({ address: baseAddr + addr, data });
+                } else if (recType === 0x02) {                  // extended segment address
+                    baseAddr = ((data[0] << 8) | data[1]) << 4;
+                } else if (recType === 0x04) {                  // extended linear address
+                    baseAddr = ((data[0] << 8) | data[1]) << 16;
+                } else if (recType === 0x01) {                  // EOF
+                    break;
                 }
+            }
 
-                const flashBtn = document.getElementById('flashBtn');
-                const boardType = document.getElementById('boardType').value;
+            // Merge pages → flat Uint8Array
+            if (pages.length === 0) throw new Error('HEX file contains no data records');
+            const maxAddr = Math.max(...pages.map(p => p.address + p.data.length));
+            const binary  = new Uint8Array(maxAddr).fill(0xFF);
+            pages.forEach(p => binary.set(p.data, p.address));
+            return binary;
+        }
 
-                flashBtn.disabled = true;
-                flashBtn.innerHTML = '<span><div class="spinner"></div>Flashing...</span>';
-                clearStatus('flashStatus');
-                
-                logToConsole('⚡ Starting flash process...', 'info');
+        // ─── STK500v1 flasher (pure Web Serial, no Node fs) ──────────────────────
+        class STK500Flasher {
+            constructor(port) {
+                this.port   = port;
+                this.reader = null;
+                this.writer = null;
+                this.buf    = [];
 
+                // Arduino Uno / Nano page size = 128 bytes
+                this.PAGE_SIZE   = 128;
+                this.FLASH_SIZE  = 32768;
+
+                // STK500 constants
+                this.Resp_STK_OK        = 0x10;
+                this.Resp_STK_INSYNC    = 0x14;
+                this.Cmnd_STK_GET_SYNC  = 0x30;
+                this.Cmnd_STK_ENTER_PROGMODE = 0x50;
+                this.Cmnd_STK_LEAVE_PROGMODE = 0x51;
+                this.Cmnd_STK_LOAD_ADDRESS   = 0x55;
+                this.Cmnd_STK_PROG_PAGE      = 0x64;
+                this.Sync_CRC_EOP            = 0x20;
+            }
+
+            async open() {
+                // Close/reopen at 115200 for bootloader
+                if (this.port.readable || this.port.writable) {
+                    try {
+                        if (serialWriter) { await serialWriter.releaseLock(); serialWriter = null; }
+                        if (serialReader) { await serialReader.cancel(); await serialReader.releaseLock(); serialReader = null; }
+                        await this.port.close();
+                    } catch(_) {}
+                }
+                await this.port.open({ baudRate: 115200, bufferSize: 4096 });
+                this.writer = this.port.writable.getWriter();
+                this.reader = this.port.readable.getReader();
+            }
+
+            async close() {
+                try { await this.reader.cancel(); } catch(_) {}
+                try { this.reader.releaseLock(); } catch(_) {}
+                try { this.writer.releaseLock(); } catch(_) {}
+                try { await this.port.close(); } catch(_) {}
+                this.reader = null;
+                this.writer = null;
+            }
+
+            async send(bytes) {
+                await this.writer.write(new Uint8Array(bytes));
+            }
+
+            async readByte(timeoutMs = 2000) {
+                if (this.buf.length > 0) return this.buf.shift();
+                return new Promise((resolve, reject) => {
+                    const t = setTimeout(() => reject(new Error('STK500 read timeout')), timeoutMs);
+                    const read = async () => {
+                        try {
+                            const { value, done } = await this.reader.read();
+                            clearTimeout(t);
+                            if (done || !value) return reject(new Error('Port closed'));
+                            for (const b of value) this.buf.push(b);
+                            resolve(this.buf.shift());
+                        } catch(e) { clearTimeout(t); reject(e); }
+                    };
+                    read();
+                });
+            }
+
+            async expect(byte, timeoutMs = 2000) {
+                const got = await this.readByte(timeoutMs);
+                if (got !== byte) throw new Error(`STK500 protocol error: expected 0x${byte.toString(16)}, got 0x${got.toString(16)}`);
+            }
+
+            // DTR pulse → resets Arduino into bootloader
+            async resetBoard() {
                 try {
-                    // Temporarily disconnect serial monitor if running
-                    const wasReading = isSerialReading;
-                    if (isSerialReading) {
-                        await stopSerialMonitor();
-                    }
-
-                    // Скачиваем firmware.hex из ветки builds с cache busting
-                    const timestamp = Date.now();
-                    const firmwareUrl = `https://raw.githubusercontent.com/Narek-D8v/arduino-web-compiler/builds/firmware.hex?t=${timestamp}`;
-                    
-                    logToConsole('📥 Downloading firmware.hex from builds branch...', 'info');
-                    showStatus('flashStatus', 'Downloading firmware...', 'info');
-                    
-                    const firmwareResponse = await fetch(firmwareUrl, {
-                        cache: 'no-store'  // Дополнительная защита от кэша
-                    });
-
-                    if (!firmwareResponse.ok) {
-                        throw new Error(`Failed to download firmware: ${firmwareResponse.status}. Make sure firmware.hex exists in the builds branch.`);
-                    }
-
-                    const hexData = await firmwareResponse.text();
-                    
-                    // Проверяем, что файл не пустой и является валидным HEX
-                    if (!hexData || hexData.length < 100) {
-                        throw new Error('Downloaded firmware file is empty or corrupted');
-                    }
-                    
-                    if (!hexData.includes(':') || !hexData.match(/^:/m)) {
-                        throw new Error('Invalid HEX file format');
-                    }
-                    
-                    logToConsole('✓ Firmware downloaded successfully', 'success');
-                    logToConsole(`Firmware size: ${hexData.length} bytes`, 'info');
-
-                    showStatus('flashStatus', 'Flashing device...', 'info');
-
-                    // Инициализируем AVRGirl с выбранным типом платы
-                    logToConsole(`⚡ Initializing AVRGirl for ${boardType.toUpperCase()}...`, 'info');
-                    
-                    avrgirl = new AvrgirlArduino({
-                        board: boardType,
-                        port: serialPort
-                    });
-
-                    // Прошиваем плату
-                    logToConsole(`⚡ Uploading firmware to ${boardType.toUpperCase()}...`, 'info');
-                    logToConsole('Please wait, this may take 10-30 seconds...', 'warning');
-                    
-                    await new Promise((resolve, reject) => {
-                        avrgirl.flash(hexData, (error) => {
-                            if (error) {
-                                reject(error);
-                            } else {
-                                resolve();
-                            }
-                        });
-                    });
-
-                    showStatus('flashStatus', 'Flash completed successfully!', 'success');
-                    logToConsole('✓ Arduino flashed successfully!', 'success');
-                    logToConsole('Your device is now running the new firmware', 'success');
-
-                    // Reconnect serial monitor if it was running
-                    if (wasReading) {
-                        setTimeout(() => {
-                            startSerialMonitor();
-                        }, 1000);
-                    }
-
-                } catch (error) {
-                    showStatus('flashStatus', 'Flash failed', 'error');
-                    
-                    // Специфичные сообщения об ошибках
-                    if (error.message.includes('No port selected')) {
-                        logToConsole('✗ No serial port selected. Please connect first.', 'error');
-                    } else if (error.message.includes('download')) {
-                        logToConsole('✗ Failed to download firmware. Please compile first.', 'error');
-                    } else if (error.message.includes('Invalid HEX')) {
-                        logToConsole('✗ Firmware file is corrupted. Please recompile.', 'error');
-                    } else {
-                        logToConsole(`✗ Flash error: ${error.message}`, 'error');
-                    }
-                    
-                    console.error(error);
-                } finally {
-                    flashBtn.disabled = false;
-                    flashBtn.innerHTML = '<span>⚡ Flash Device</span>';
+                    await this.port.setSignals({ dataTerminalReady: false });
+                    await new Promise(r => setTimeout(r, 250));
+                    await this.port.setSignals({ dataTerminalReady: true });
+                    await new Promise(r => setTimeout(r, 50));
+                } catch(_) {
+                    // Some drivers don't support setSignals — continue anyway
                 }
+            }
+
+            async sync(retries = 10) {
+                for (let i = 0; i < retries; i++) {
+                    try {
+                        this.buf = [];
+                        await this.send([this.Cmnd_STK_GET_SYNC, this.Sync_CRC_EOP]);
+                        await this.expect(this.Resp_STK_INSYNC, 400);
+                        await this.expect(this.Resp_STK_OK, 400);
+                        return;
+                    } catch(_) {
+                        await new Promise(r => setTimeout(r, 100));
+                    }
+                }
+                throw new Error('Cannot sync with bootloader. Is the board connected and reset?');
+            }
+
+            async enterProgMode() {
+                await this.send([this.Cmnd_STK_ENTER_PROGMODE, this.Sync_CRC_EOP]);
+                await this.expect(this.Resp_STK_INSYNC);
+                await this.expect(this.Resp_STK_OK);
+            }
+
+            async leaveProgMode() {
+                await this.send([this.Cmnd_STK_LEAVE_PROGMODE, this.Sync_CRC_EOP]);
+                await this.expect(this.Resp_STK_INSYNC);
+                await this.expect(this.Resp_STK_OK);
+            }
+
+            async loadAddress(wordAddr) {
+                await this.send([
+                    this.Cmnd_STK_LOAD_ADDRESS,
+                    wordAddr & 0xFF,
+                    (wordAddr >> 8) & 0xFF,
+                    this.Sync_CRC_EOP
+                ]);
+                await this.expect(this.Resp_STK_INSYNC);
+                await this.expect(this.Resp_STK_OK);
+            }
+
+            async writePage(data) {
+                const len = data.length;
+                const cmd = [
+                    this.Cmnd_STK_PROG_PAGE,
+                    (len >> 8) & 0xFF,
+                    len & 0xFF,
+                    0x46, // 'F' = flash memory
+                    ...data,
+                    this.Sync_CRC_EOP
+                ];
+                await this.send(cmd);
+                await this.expect(this.Resp_STK_INSYNC, 5000);
+                await this.expect(this.Resp_STK_OK,     5000);
+            }
+
+            async flash(binary, onProgress) {
+                const totalPages = Math.ceil(binary.length / this.PAGE_SIZE);
+                for (let page = 0; page < totalPages; page++) {
+                    const byteAddr = page * this.PAGE_SIZE;
+                    const wordAddr = byteAddr >> 1;
+                    const slice    = binary.slice(byteAddr, byteAddr + this.PAGE_SIZE);
+                    const pageData = new Uint8Array(this.PAGE_SIZE).fill(0xFF);
+                    pageData.set(slice);
+
+                    await this.loadAddress(wordAddr);
+                    await this.writePage(Array.from(pageData));
+
+                    if (onProgress) onProgress(page + 1, totalPages);
+                }
+            }
+        }
+
+        // ─── Main flash entry point ───────────────────────────────────────────────
+        async function flashArduino() {
+            if (!serialPort) {
+                showStatus('flashStatus', 'Please connect to board first', 'error');
+                logToConsole('✗ No serial port connected. Click "Connect to Board" first.', 'error');
+                return;
+            }
+
+            const flashBtn  = document.getElementById('flashBtn');
+            flashBtn.disabled = true;
+            flashBtn.innerHTML = '<span><div class="spinner"></div>Flashing...</span>';
+            clearStatus('flashStatus');
+
+            const wasReading = isSerialReading;
+            if (wasReading) await stopSerialMonitor();
+
+            const flasher = new STK500Flasher(serialPort);
+
+            try {
+                // 1. Download firmware.hex (cache-busted)
+                const url = `https://raw.githubusercontent.com/Narek-D8v/arduino-web-compiler/builds/firmware.hex?t=${Date.now()}`;
+                logToConsole('📥 Downloading firmware.hex...', 'info');
+                showStatus('flashStatus', 'Downloading firmware...', 'info');
+
+                const resp = await fetch(url, { cache: 'no-store' });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status} — firmware.hex not found in builds branch`);
+
+                const hexText = await resp.text();
+                if (!hexText.trim().startsWith(':'))
+                    throw new Error('Downloaded file is not a valid Intel HEX');
+
+                logToConsole(`✓ Firmware downloaded (${hexText.length} bytes)`, 'success');
+
+                // 2. Parse HEX → binary
+                logToConsole('🔧 Parsing Intel HEX...', 'info');
+                const binary = parseIntelHex(hexText);
+                logToConsole(`✓ Binary size: ${binary.length} bytes`, 'success');
+
+                // 3. Open port at 115200, pulse DTR to enter bootloader
+                logToConsole('🔌 Opening port at 115200 baud...', 'info');
+                showStatus('flashStatus', 'Connecting to bootloader...', 'info');
+                await flasher.open();
+
+                logToConsole('🔄 Resetting board into bootloader...', 'info');
+                await flasher.resetBoard();
+                await new Promise(r => setTimeout(r, 500));
+
+                // 4. Sync with STK500 bootloader
+                logToConsole('🤝 Syncing with STK500 bootloader...', 'info');
+                await flasher.sync();
+                logToConsole('✓ Bootloader sync OK', 'success');
+
+                // 5. Enter programming mode
+                await flasher.enterProgMode();
+                logToConsole('✓ Programming mode entered', 'success');
+
+                // 6. Write pages
+                logToConsole('⚡ Writing flash pages...', 'info');
+                showStatus('flashStatus', 'Writing firmware...', 'info');
+
+                const totalPages = Math.ceil(binary.length / flasher.PAGE_SIZE);
+                await flasher.flash(binary, (done, total) => {
+                    const pct = Math.round((done / total) * 100);
+                    if (done % 10 === 0 || done === total) {
+                        logToConsole(`   Writing page ${done}/${total} (${pct}%)`, 'info');
+                        showStatus('flashStatus', `Writing firmware... ${pct}%`, 'info');
+                    }
+                });
+
+                // 7. Leave programming mode
+                await flasher.leaveProgMode();
+                logToConsole('✓ Left programming mode', 'success');
+
+                showStatus('flashStatus', 'Flash completed successfully! 🎉', 'success');
+                logToConsole('✓ Done! Arduino flashed successfully.', 'success');
+                logToConsole('Your device is now running the new firmware.', 'success');
+
+            } catch (err) {
+                showStatus('flashStatus', 'Flash failed', 'error');
+                logToConsole(`✗ Flash error: ${err.message}`, 'error');
+                console.error('Full flash error:', err);
+            } finally {
+                try { await flasher.close(); } catch(_) {}
+
+                // Reopen port for serial monitor if it was running
+                if (wasReading || serialWriter === null) {
+                    try {
+                        const baud = parseInt(document.getElementById('baudRate').value);
+                        await serialPort.open({ baudRate: baud });
+                        serialWriter = serialPort.writable.getWriter();
+                        document.getElementById('portStatus').innerHTML =
+                            `<span class="text-accent-primary">● Reconnected at ${baud} baud</span>`;
+                        if (wasReading) setTimeout(() => startSerialMonitor(), 500);
+                    } catch(_) {}
+                }
+
+                flashBtn.disabled = false;
+                flashBtn.innerHTML = '<span>⚡ Flash Device</span>';
+            }
         }
 
         // Serial Monitor Functions
