@@ -38,65 +38,71 @@ jobs:
 
       - name: Install & Sync Libraries
         run: |
-          # Исправлено: используем --overwrite
+          # 1. Настройка конфига
           arduino-cli config init --overwrite
           arduino-cli config set library.enable_unsafe_install true
-          
           arduino-cli lib update-index
+          
           LIBS_PATH="$HOME/Arduino/libraries"
           mkdir -p "$LIBS_PATH"
           
           CUSTOM_DIR="libraries"
 
           if [ -d "$CUSTOM_DIR" ]; then
-            echo "🔍 Checking for custom components in /$CUSTOM_DIR..."
-            for H_FILE in "$CUSTOM_DIR"/*.h; do
-              [ -f "$H_FILE" ] || continue
+            echo "🔍 Processing /$CUSTOM_DIR..."
+            
+            # Установка ZIP-архивов с очисткой
+            # Ищем только реальные .zip файлы, игнорируя скрытые папки
+            find "$CUSTOM_DIR" -maxdepth 1 -name "*.zip" -type f | while read ZIP; do
+              echo "📦 Attempting to install ZIP: $(basename "$ZIP")"
+              # Пробуем установить. Если не вышло — выводим лог, но не падаем сразу
+              arduino-cli lib install --zip-path "$ZIP" || echo "❌ Failed to install $ZIP"
+            done
+
+            # Обработка одиночных .h файлов
+            find "$CUSTOM_DIR" -maxdepth 1 -name "*.h" -type f | while read H_FILE; do
               LIB_NAME=$(basename "$H_FILE" .h)
               echo "📄 Installing loose header: $LIB_NAME"
               mkdir -p "$LIBS_PATH/$LIB_NAME"
               cp "$H_FILE" "$LIBS_PATH/$LIB_NAME/"
             done
 
-            for ZIP in "$CUSTOM_DIR"/*.zip; do
-              [ -f "$ZIP" ] || continue
-              echo "📦 Installing ZIP: $(basename "$ZIP")"
-              arduino-cli lib install --zip-path "$ZIP"
-            done
-
-            for DIR in "$CUSTOM_DIR"/*/; do
-              [ -d "$DIR" ] || continue
-              echo "📂 Copying folder: $(basename "$DIR")"
+            # Копирование папок
+            find "$CUSTOM_DIR" -maxdepth 1 -mindepth 1 -type d | while read DIR; do
+              BN=$(basename "$DIR")
+              # Пропускаем скрытые папки (начинаются с точки)
+              [[ "$BN" == .* ]] && continue
+              echo "📂 Copying folder: $BN"
               cp -r "$DIR" "$LIBS_PATH/"
             done
           fi
 
+          # 2. Авто-установка зависимостей из кода
           SKETCH="build_sketch/build_sketch.ino"
           INCLUDES=$(grep -oP '(?<=#include\s[<"])[\w./]+\.h' "$SKETCH" || true)
           
           for H in $INCLUDES; do
             case "$H" in Arduino.h|avr/*.h|util/*.h|pgmspace.h|interrupt.h) continue ;; esac
             LIB_G="${H%.h}"
+            # Проверяем, не установили ли мы её уже из кастомных
             if [ ! -d "$LIBS_PATH/$LIB_G" ]; then
-              echo "📥 Auto-installing: $LIB_G"
-              arduino-cli lib install "$LIB_G" || echo "⚠️ $LIB_G not found"
+              echo "📥 Registry install: $LIB_G"
+              arduino-cli lib install "$LIB_G" || echo "⚠️ $LIB_G not found in registry"
             fi
           done
 
       - name: Run Compiler
         run: |
-          echo "🔨 Starting build for Arduino Uno..."
+          echo "🔨 Compiling for Arduino Uno..."
           arduino-cli compile --fqbn arduino:avr:uno --output-dir ./out build_sketch
 
-      - name: Push Firmware to Builds
+      - name: Push Firmware
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
-
           git fetch origin builds || true
           git checkout -B builds
-
           cp out/build_sketch.ino.hex firmware.hex
           git add firmware.hex
           git commit -m "Build: ${{ github.event.client_payload.timestamp }}" || echo "No changes"
