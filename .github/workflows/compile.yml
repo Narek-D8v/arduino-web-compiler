@@ -1,13 +1,10 @@
 name: Arduino Remote Compile
-
 on:
   repository_dispatch:
     types: [compile_cmd]
-
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Принудительно включаем Node.js 24, чтобы убрать предупреждение
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       
@@ -18,7 +15,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24' # Ставим самую свежую версию
+          node-version: '24'
 
       - name: Setup Arduino CLI
         uses: arduino/setup-arduino-cli@v2
@@ -31,17 +28,17 @@ jobs:
       - name: Compile Sketch
         run: |
           mkdir -p build_sketch
-          # Используем cat с экранированием, чтобы сохранить кавычки
-          cat << 'EOF' > build_sketch/build_sketch.ino
+          cat << 'ARDUINO_SKETCH_END' > build_sketch/build_sketch.ino
           ${{ github.event.client_payload.code }}
-          EOF
+          ARDUINO_SKETCH_END
           
           arduino-cli compile --fqbn arduino:avr:uno build_sketch --output-dir ./out
 
       - name: Push Firmware to builds branch
         run: |
-          git config --global user.name "CompilerBot"
-          git config --global user.email "bot@github.com"
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
           git fetch origin builds || true
           git checkout -B builds
           cp out/build_sketch.ino.hex firmware.hex
