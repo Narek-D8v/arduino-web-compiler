@@ -1,57 +1,53 @@
-name: Arduino Remote Compile[cite: 3]
+name: Arduino Remote Compile
 
-# 1. ТРИГГЕРЫ: Ожидание команды от Vercel/API
 on:
   repository_dispatch:
-    types: [compile_cmd][cite: 3]
+    types: [compile_cmd]
 
 jobs:
   build:
-    runs-on: ubuntu-latest[cite: 3]
+    runs-on: ubuntu-latest
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true[cite: 3]
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
-      # --- ПОДГОТОВКА ОКРУЖЕНИЯ ---
-      - name: Checkout code[cite: 3]
-        uses: actions/checkout@v4[cite: 3]
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          ref: main[cite: 3]
+          ref: main
 
-      - name: Setup Node.js[cite: 3]
-        uses: actions/setup-node@v4[cite: 3]
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '24'[cite: 3]
+          node-version: '24'
 
-      - name: Setup Arduino CLI[cite: 3]
-        uses: arduino/setup-arduino-cli@v2[cite: 3]
+      - name: Setup Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
 
-      - name: Install AVR Platform[cite: 3]
+      - name: Install AVR Platform
         run: |
           arduino-cli core update-index
           arduino-cli core install arduino:avr
 
-      # --- ПОДГОТОВКА СКЕТЧА ---
-      - name: Write Sketch File[cite: 3]
+      - name: Write Sketch File
         run: |
           mkdir -p build_sketch
-          cat << 'ARDUINO_SKETCH_END' > build_sketch/build_sketch.ino[cite: 3]
-          ${{ github.event.client_payload.code }}[cite: 3]
-          ARDUINO_SKETCH_END[cite: 3]
+          cat << 'ARDUINO_SKETCH_END' > build_sketch/build_sketch.ino
+          ${{ github.event.client_payload.code }}
+          ARDUINO_SKETCH_END
 
-      # --- УПРАВЛЕНИЕ БИБЛИОТЕКАМИ ---
-      - name: Install & Sync Libraries[cite: 3]
+      - name: Install & Sync Libraries
         run: |
-          arduino-cli lib update-index[cite: 3]
+          arduino-cli lib update-index
           LIBS_PATH="$HOME/Arduino/libraries"
-          mkdir -p "$LIBS_PATH"[cite: 3]
+          mkdir -p "$LIBS_PATH"
           
-          CUSTOM_DIR="libraries"[cite: 3]
+          CUSTOM_DIR="libraries"
 
-          if [ -d "$CUSTOM_DIR" ]; then[cite: 3]
+          if [ -d "$CUSTOM_DIR" ]; then
             echo "🔍 Checking for custom components in /$CUSTOM_DIR..."
             
-            # Обработка одиночных .h файлов (для Animation.h)
+            # Обработка одиночных .h файлов (например, Animation.h)
             for H_FILE in "$CUSTOM_DIR"/*.h; do
               [ -f "$H_FILE" ] || continue
               LIB_NAME=$(basename "$H_FILE" .h)
@@ -60,53 +56,50 @@ jobs:
               cp "$H_FILE" "$LIBS_PATH/$LIB_NAME/"
             done
 
-            # Установка ZIP-архивов[cite: 3]
+            # Установка ZIP-архивов
             for ZIP in "$CUSTOM_DIR"/*.zip; do
               [ -f "$ZIP" ] || continue
-              echo "📦 Installing ZIP: $(basename "$ZIP")"[cite: 3]
-              arduino-cli lib install --zip-path "$ZIP"[cite: 3]
+              echo "📦 Installing ZIP: $(basename "$ZIP")"
+              arduino-cli lib install --zip-path "$ZIP"
             done
 
-            # Копирование готовых папок библиотек[cite: 3]
+            # Копирование папок библиотек
             for DIR in "$CUSTOM_DIR"/*/; do
               [ -d "$DIR" ] || continue
-              echo "📂 Copying folder: $(basename "$DIR")"[cite: 3]
-              cp -r "$DIR" "$LIBS_PATH/"[cite: 3]
+              echo "📂 Copying folder: $(basename "$DIR")"
+              cp -r "$DIR" "$LIBS_PATH/"
             done
           fi
 
-          # Авто-установка библиотек по #include из кода[cite: 3]
-          # (Здесь используется твоя логика LIB_MAP из compile_2.yml)[cite: 3]
+          # Авто-установка стандартных библиотек по #include из скетча
           SKETCH="build_sketch/build_sketch.ino"
-          INCLUDES=$(grep -oP '(?<=#include\s[<"])[\w./]+\.h' "$SKETCH" || true)[cite: 3]
+          INCLUDES=$(grep -oP '(?<=#include\s[<"])[\w./]+\.h' "$SKETCH" || true)
           
-          for H in $INCLUDES; do[cite: 3]
-            case "$H" in Arduino.h|avr/*.h|util/*.h|pgmspace.h|interrupt.h) continue ;; esac[cite: 3]
+          for H in $INCLUDES; do
+            case "$H" in Arduino.h|avr/*.h|util/*.h|pgmspace.h|interrupt.h) continue ;; esac
             
             LIB_G="${H%.h}"
             if [ ! -d "$LIBS_PATH/$LIB_G" ]; then
-              echo "📥 Auto-installing: $LIB_G"[cite: 3]
-              arduino-cli lib install "$LIB_G" || echo "⚠️ $LIB_G not found"[cite: 3]
+              echo "📥 Auto-installing: $LIB_G"
+              arduino-cli lib install "$LIB_G" || echo "⚠️ $LIB_G not found"
             fi
           done
 
-      # --- КОМПИЛЯЦИЯ ---
-      - name: Run Compiler[cite: 3]
+      - name: Run Compiler
         run: |
-          echo "🔨 Starting build for Arduino Uno..."[cite: 3]
-          arduino-cli compile --fqbn arduino:avr:uno --output-dir ./out build_sketch[cite: 3]
+          echo "🔨 Starting build for Arduino Uno..."
+          arduino-cli compile --fqbn arduino:avr:uno --output-dir ./out build_sketch
 
-      # --- ПУБЛИКАЦИЯ РЕЗУЛЬТАТА ---
-      - name: Push Firmware to Builds[cite: 3]
+      - name: Push Firmware to Builds
         run: |
-          git config --global user.name "GitHub Actions Bot"[cite: 3]
-          git config --global user.email "actions@github.com"[cite: 3]
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@[github.com/$](https://github.com/$){{ github.repository }}[cite: 3]
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
 
-          git fetch origin builds || true[cite: 3]
-          git checkout -B builds[cite: 3]
+          git fetch origin builds || true
+          git checkout -B builds
 
-          cp out/build_sketch.ino.hex firmware.hex[cite: 3]
-          git add firmware.hex[cite: 3]
-          git commit -m "Build: ${{ github.event.client_payload.timestamp }}" || echo "No changes"[cite: 3]
-          git push origin builds --force[cite: 3]
+          cp out/build_sketch.ino.hex firmware.hex
+          git add firmware.hex
+          git commit -m "Build: ${{ github.event.client_payload.timestamp }}" || echo "No changes"
+          git push origin builds --force
