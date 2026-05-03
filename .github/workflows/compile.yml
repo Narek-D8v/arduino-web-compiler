@@ -38,8 +38,8 @@ jobs:
 
       - name: Install & Sync Libraries
         run: |
-          # Включаем поддержку установки из ZIP
-          arduino-cli config init --force
+          # Исправлено: используем --overwrite
+          arduino-cli config init --overwrite
           arduino-cli config set library.enable_unsafe_install true
           
           arduino-cli lib update-index
@@ -50,8 +50,6 @@ jobs:
 
           if [ -d "$CUSTOM_DIR" ]; then
             echo "🔍 Checking for custom components in /$CUSTOM_DIR..."
-            
-            # Обработка одиночных .h файлов
             for H_FILE in "$CUSTOM_DIR"/*.h; do
               [ -f "$H_FILE" ] || continue
               LIB_NAME=$(basename "$H_FILE" .h)
@@ -60,14 +58,12 @@ jobs:
               cp "$H_FILE" "$LIBS_PATH/$LIB_NAME/"
             done
 
-            # Установка ZIP-архивов (теперь это сработает!)
             for ZIP in "$CUSTOM_DIR"/*.zip; do
               [ -f "$ZIP" ] || continue
               echo "📦 Installing ZIP: $(basename "$ZIP")"
               arduino-cli lib install --zip-path "$ZIP"
             done
 
-            # Копирование папок библиотек
             for DIR in "$CUSTOM_DIR"/*/; do
               [ -d "$DIR" ] || continue
               echo "📂 Copying folder: $(basename "$DIR")"
@@ -75,13 +71,11 @@ jobs:
             done
           fi
 
-          # Авто-установка стандартных библиотек по #include
           SKETCH="build_sketch/build_sketch.ino"
           INCLUDES=$(grep -oP '(?<=#include\s[<"])[\w./]+\.h' "$SKETCH" || true)
           
           for H in $INCLUDES; do
             case "$H" in Arduino.h|avr/*.h|util/*.h|pgmspace.h|interrupt.h) continue ;; esac
-            
             LIB_G="${H%.h}"
             if [ ! -d "$LIBS_PATH/$LIB_G" ]; then
               echo "📥 Auto-installing: $LIB_G"
