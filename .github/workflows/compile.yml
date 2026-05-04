@@ -149,19 +149,41 @@ jobs:
           git checkout -B builds
 
           # Удаляем старые артефакты
-          rm -f firmware.hex firmware.bin
+          rm -f firmware.hex firmware.bin bootloader.bin partitions.bin boot_app0.bin
 
-          # Копируем только то что реально скомпилилось
-          [ -f out/build_sketch.ino.hex ] && cp out/build_sketch.ino.hex firmware.hex && echo "✓ Copied firmware.hex"
-          [ -f out/build_sketch.ino.bin ] && cp out/build_sketch.ino.bin firmware.bin && echo "✓ Copied firmware.bin"
+          BOARD="${{ github.event.client_payload.board }}"
 
-          # git add только существующих файлов — не падает если файла нет
-          [ -f firmware.hex ] && git add firmware.hex
-          [ -f firmware.bin ] && git add firmware.bin
+          if [[ "$BOARD" == esp32* ]]; then
+            # Основной бинарник приложения
+            [ -f out/build_sketch.ino.bin ] && cp out/build_sketch.ino.bin firmware.bin && echo "✓ firmware.bin"
+
+            # Bootloader — ищем в кэше arduino-esp32 платформы
+            ESP32_PKG=$(find ~/.arduino15/packages/esp32 -name "bootloader_dio_40m.bin" 2>/dev/null | head -1)
+            [ -n "$ESP32_PKG" ] && cp "$ESP32_PKG" bootloader.bin && echo "✓ bootloader.bin ($ESP32_PKG)"
+
+            # Partition table — default.csv → default.bin
+            PART_BIN=$(find ~/.arduino15/packages/esp32 -name "default.bin" -path "*/partitions/*" 2>/dev/null | head -1)
+            [ -n "$PART_BIN" ] && cp "$PART_BIN" partitions.bin && echo "✓ partitions.bin ($PART_BIN)"
+
+            # boot_app0.bin
+            BOOT_APP=$(find ~/.arduino15/packages/esp32 -name "boot_app0.bin" 2>/dev/null | head -1)
+            [ -n "$BOOT_APP" ] && cp "$BOOT_APP" boot_app0.bin && echo "✓ boot_app0.bin ($BOOT_APP)"
+
+            # Добавляем все что есть
+            [ -f firmware.bin   ] && git add firmware.bin
+            [ -f bootloader.bin ] && git add bootloader.bin
+            [ -f partitions.bin ] && git add partitions.bin
+            [ -f boot_app0.bin  ] && git add boot_app0.bin
+
+          else
+            # AVR — только .hex
+            [ -f out/build_sketch.ino.hex ] && cp out/build_sketch.ino.hex firmware.hex && echo "✓ firmware.hex"
+            [ -f firmware.hex ] && git add firmware.hex
+          fi
 
           # Коммитим только если есть staged изменения
           git diff --cached --quiet && echo "No changes to commit" && exit 0
 
           git commit -m "Build: ${{ github.event.client_payload.board }} @ ${{ github.event.client_payload.timestamp }}"
           git push origin builds --force
-          echo "✓ Firmware pushed to builds branch"
+          echo "✓ Artifacts pushed to builds branch"
