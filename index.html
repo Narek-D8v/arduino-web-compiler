@@ -1315,11 +1315,28 @@ void loop() {
         }
 
         // ─── ESP32 flasher via esptool-js ─────────────────────────────────────────
+
+        // Parse ESP32 partition table binary to find app0 address
+        function parsePartitionTable(buf) {
+            const view = new DataView(buf);
+            // Each entry is 32 bytes, magic = 0xAA50
+            for (let i = 0; i + 32 <= buf.byteLength; i += 32) {
+                const magic = view.getUint16(i, true);
+                if (magic !== 0xAA50) continue;
+                const type    = view.getUint8(i + 2);   // 0 = app
+                const subtype = view.getUint8(i + 3);   // 0 = factory / ota_0
+                const offset  = view.getUint32(i + 4, true);
+                if (type === 0x00 && (subtype === 0x00 || subtype === 0x10)) {
+                    return offset; // factory or ota_0
+                }
+            }
+            return 0x10000; // fallback
+        }
+
         async function flashESP32(port, binData) {
             logToConsole('📦 Loading esptool-js...', 'info');
             const { ESPLoader, Transport } = await import('https://unpkg.com/esptool-js@0.6.0/bundle.js');
 
-            // esptool-js takes over the port — release our handles first
             if (serialWriter) { try { await serialWriter.releaseLock(); } catch(_) {} serialWriter = null; }
             if (serialReader) { try { await serialReader.cancel(); await serialReader.releaseLock(); } catch(_) {} serialReader = null; }
             try { await port.close(); } catch(_) {}
@@ -1341,37 +1358,47 @@ void loop() {
             const chipName = await loader.main();
             logToConsole(`✓ Connected — chip: ${chipName}`, 'success');
 
-            // ── Download all 4 required ESP32 files ─────────────────────────────
+            // ── Download all 4 ESP32 files ───────────────────────────────────────
             const BASE = `https://raw.githubusercontent.com/Narek-D8v/arduino-web-compiler/builds`;
             const t    = Date.now();
-
-            const filesToFlash = [
-                { url: `${BASE}/bootloader.bin?t=${t}`,  address: 0x1000,  label: 'bootloader.bin'  },
-                { url: `${BASE}/partitions.bin?t=${t}`,  address: 0x8000,  label: 'partitions.bin'  },
-                { url: `${BASE}/boot_app0.bin?t=${t}`,   address: 0xe000,  label: 'boot_app0.bin'   },
-                { url: `${BASE}/firmware.bin?t=${t}`,    address: 0x10000, label: 'firmware.bin'     },
-            ];
 
             logToConsole('📥 Downloading ESP32 flash files...', 'info');
             showStatus('flashStatus', 'Downloading files...', 'info');
 
-            const fileArray = [];
-            for (const f of filesToFlash) {
-                const resp = await fetch(f.url, { cache: 'no-store' });
-                if (!resp.ok) {
-                    logToConsole(`⚠ ${f.label} not found (${resp.status}) — skipping`, 'warning');
-                    continue;
-                }
-                const buf    = await resp.arrayBuffer();
-                const binary = Array.from(new Uint8Array(buf), b => String.fromCharCode(b)).join('');
-                fileArray.push({ data: binary, address: f.address });
-                logToConsole(`   ✓ ${f.label} — ${buf.byteLength} bytes @ 0x${f.address.toString(16)}`, 'success');
+            async function downloadBin(filename) {
+                const resp = await fetch(`${BASE}/${filename}?t=${t}`, { cache: 'no-store' });
+                if (!resp.ok) throw new Error(`${filename} not found in builds branch (${resp.status})`);
+                const buf = await resp.arrayBuffer();
+                logToConsole(`   ✓ ${filename} — ${buf.byteLength} bytes`, 'success');
+                return buf;
             }
 
-            if (fileArray.length === 0) throw new Error('No flash files found in builds branch');
+            const [bootBuf, partBuf, bootAppBuf, firmBuf] = await Promise.all([
+                downloadBin('bootloader.bin'),
+                downloadBin('partitions.bin'),
+                downloadBin('boot_app0.bin'),
+                downloadBin('firmware.bin'),
+            ]);
 
-            logToConsole(`⚡ Flashing ${fileArray.length} file(s)...`, 'info');
+            // Parse partition table to get the real app address
+            const appAddress = parsePartitionTable(partBuf);
+            logToConsole(`   App address from partition table: 0x${appAddress.toString(16)}`, 'info');
+
+            function toStr(buf) {
+                return Array.from(new Uint8Array(buf), b => String.fromCharCode(b)).join('');
+            }
+
+            const fileArray = [
+                { data: toStr(bootBuf),    address: 0x1000      },
+                { data: toStr(partBuf),    address: 0x8000      },
+                { data: toStr(bootAppBuf), address: 0xe000      },
+                { data: toStr(firmBuf),    address: appAddress  },
+            ];
+
+            logToConsole(`⚡ Flashing 4 files (app @ 0x${appAddress.toString(16)})...`, 'info');
             showStatus('flashStatus', 'Writing firmware...', 'info');
+
+            const labels = ['bootloader.bin', 'partitions.bin', 'boot_app0.bin', 'firmware.bin'];
 
             await loader.writeFlash({
                 fileArray,
@@ -1382,8 +1409,8 @@ void loop() {
                 compress:   true,
                 reportProgress(fileIndex, written, total) {
                     const pct  = Math.round((written / total) * 100);
-                    const name = filesToFlash[fileIndex]?.label ?? `file ${fileIndex}`;
-                    if (pct % 20 === 0 || written === total) {
+                    const name = labels[fileIndex] ?? `file ${fileIndex}`;
+                    if (pct % 25 === 0 || written === total) {
                         logToConsole(`   ${name}: ${pct}%`, 'info');
                         showStatus('flashStatus', `Writing ${name}... ${pct}%`, 'info');
                     }
