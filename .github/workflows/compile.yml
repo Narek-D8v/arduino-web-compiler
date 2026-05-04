@@ -22,9 +22,7 @@ jobs:
       - name: Install Platforms
         run: |
           arduino-cli core update-index
-          # Ставим AVR для Uno/Nano
           arduino-cli core install arduino:avr
-          # Ставим поддержку ESP32
           arduino-cli core update-index --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
           arduino-cli core install esp32:esp32 --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
 
@@ -38,43 +36,132 @@ jobs:
       - name: Install Libraries
         run: |
           arduino-cli lib update-index
-          # Если в коде есть дисплей, ставим зависимости
-          arduino-cli lib install "Adafruit GFX Library" "Adafruit BusIO" "Adafruit SSD1306"
-          # Твои кастомные либы из папки /libraries
+
+          ARDUINO_LIBS_DIR="$HOME/Arduino/libraries"
+          mkdir -p "$ARDUINO_LIBS_DIR"
+
+          # Кастомные ZIP-библиотеки из /libraries/
           if [ -d "libraries" ]; then
-            cp -r libraries/* $HOME/Arduino/libraries/ || true
+            for ZIP_PATH in libraries/*.zip; do
+              [ -f "$ZIP_PATH" ] || continue
+              echo "📦 Installing ZIP: $ZIP_PATH"
+              arduino-cli lib install --zip-path "$ZIP_PATH" || echo "⚠ Failed: $ZIP_PATH"
+            done
+            for LIB_PATH in libraries/*/; do
+              [ -d "$LIB_PATH" ] || continue
+              LIB_NAME=$(basename "$LIB_PATH")
+              echo "📂 Copying: $LIB_NAME"
+              cp -r "$LIB_PATH" "$ARDUINO_LIBS_DIR/$LIB_NAME"
+            done
           fi
+
+          # Известные библиотеки из Arduino Library Manager
+          declare -A LIB_MAP=(
+            ["Servo.h"]="Servo"
+            ["Wire.h"]="Wire"
+            ["SPI.h"]="SPI"
+            ["EEPROM.h"]="EEPROM"
+            ["SD.h"]="SD"
+            ["Adafruit_NeoPixel.h"]="Adafruit NeoPixel"
+            ["DHT.h"]="DHT sensor library"
+            ["LiquidCrystal.h"]="LiquidCrystal"
+            ["LiquidCrystal_I2C.h"]="LiquidCrystal I2C"
+            ["U8g2lib.h"]="U8g2"
+            ["Adafruit_GFX.h"]="Adafruit GFX Library"
+            ["Adafruit_SSD1306.h"]="Adafruit SSD1306"
+            ["Adafruit_BusIO.h"]="Adafruit BusIO"
+            ["TFT_eSPI.h"]="TFT_eSPI"
+            ["FastLED.h"]="FastLED"
+            ["Stepper.h"]="Stepper"
+            ["AccelStepper.h"]="AccelStepper"
+            ["IRremote.h"]="IRremote"
+            ["RF24.h"]="RF24"
+            ["WiFi.h"]="WiFi"
+            ["WebServer.h"]="WebServer"
+            ["HTTPClient.h"]="HTTPClient"
+            ["ArduinoJson.h"]="ArduinoJson"
+            ["PubSubClient.h"]="PubSubClient"
+            ["Ticker.h"]="Ticker"
+            ["TimerOne.h"]="TimerOne"
+            ["OneWire.h"]="OneWire"
+            ["DallasTemperature.h"]="DallasTemperature"
+            ["MPU6050.h"]="MPU6050"
+            ["Adafruit_BME280.h"]="Adafruit BME280 library"
+            ["Adafruit_BMP280.h"]="Adafruit BMP280 library"
+            ["Ultrasonic.h"]="Ultrasonic"
+            ["Keypad.h"]="Keypad"
+            ["RotaryEncoder.h"]="RotaryEncoder"
+            ["Bounce2.h"]="Bounce2"
+            ["Keyboard.h"]="Keyboard"
+            ["Mouse.h"]="Mouse"
+            ["SoftwareSerial.h"]="SoftwareSerial"
+            ["MFRC522.h"]="MFRC522"
+            ["TinyGPS++.h"]="TinyGPSPlus"
+            ["Ethernet.h"]="Ethernet"
+          )
+
+          SKETCH="build_sketch/build_sketch.ino"
+          INCLUDES=$(grep -oP '(?<=#include\s[<"])[\w./]+\.h' "$SKETCH" || true)
+          echo "Found includes: $INCLUDES"
+
+          for HEADER in $INCLUDES; do
+            case "$HEADER" in
+              Arduino.h|avr/*.h|util/*.h|pgmspace.h|interrupt.h|esp_*.h|freertos/*.h)
+                continue ;;
+            esac
+
+            HEADER_NAME="${HEADER%.h}"
+            if [ -d "$ARDUINO_LIBS_DIR/$HEADER_NAME" ]; then
+              echo "Already installed (custom): $HEADER"
+              continue
+            fi
+
+            if [[ -n "${LIB_MAP[$HEADER]+_}" ]]; then
+              echo "📥 Installing: ${LIB_MAP[$HEADER]}"
+              arduino-cli lib install "${LIB_MAP[$HEADER]}" || echo "⚠ Could not install ${LIB_MAP[$HEADER]}"
+            else
+              GUESS="${HEADER%.h}"
+              echo "❓ Trying by name: $GUESS"
+              arduino-cli lib install "$GUESS" || echo "⚠ Not found: $GUESS"
+            fi
+          done
 
       - name: Compile
         run: |
-          # Выбираем FQBN на основе данных из Payload (от твоего сайта)
-          # Если плата не передана, по умолчанию Uno
           BOARD="${{ github.event.client_payload.board }}"
-          if [[ "$BOARD" == "esp32" ]]; then
+          if [[ "$BOARD" == esp32* ]]; then
             FQBN="esp32:esp32:esp32"
           else
             FQBN="arduino:avr:uno"
           fi
-          
+
           echo "🔨 Compiling for $FQBN..."
-          arduino-cli compile --fqbn $FQBN --output-dir ./out build_sketch
+          arduino-cli compile --fqbn "$FQBN" --output-dir ./out build_sketch
+          echo "✓ Compilation successful"
 
       - name: Push Artifacts
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
-          
+
           git fetch origin builds || true
           git checkout -B builds
 
-          # Очищаем старые билды
+          # Удаляем старые артефакты
           rm -f firmware.hex firmware.bin
 
-          # Сохраняем нужный формат в зависимости от того, что скомпилировалось
-          [ -f out/build_sketch.ino.hex ] && cp out/build_sketch.ino.hex firmware.hex
-          [ -f out/build_sketch.ino.bin ] && cp out/build_sketch.ino.bin firmware.bin
+          # Копируем только то что реально скомпилилось
+          [ -f out/build_sketch.ino.hex ] && cp out/build_sketch.ino.hex firmware.hex && echo "✓ Copied firmware.hex"
+          [ -f out/build_sketch.ino.bin ] && cp out/build_sketch.ino.bin firmware.bin && echo "✓ Copied firmware.bin"
 
-          git add firmware.hex firmware.bin
-          git commit -m "Build for ${{ github.event.client_payload.board }} at ${{ github.event.client_payload.timestamp }}"
+          # git add только существующих файлов — не падает если файла нет
+          [ -f firmware.hex ] && git add firmware.hex
+          [ -f firmware.bin ] && git add firmware.bin
+
+          # Коммитим только если есть staged изменения
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+
+          git commit -m "Build: ${{ github.event.client_payload.board }} @ ${{ github.event.client_payload.timestamp }}"
           git push origin builds --force
+          echo "✓ Firmware pushed to builds branch"
