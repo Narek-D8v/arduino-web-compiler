@@ -8,10 +8,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-    <link rel="manifest" href="/site.webmanifest">
     <style>
         :root {
             --bg-primary: #0a0e17;
@@ -1317,7 +1313,13 @@ void loop() {
 
         // ─── ESP32 flasher via esptool-js ─────────────────────────────────────────
         async function flashESP32(port, binData) {
-            const { ESPLoader, Transport } = esptooljs;
+            // esptool-js@0.6.0 exposes ESPLoader and Transport directly on window
+            const ESPLoader = window.ESPLoader;
+            const Transport = window.Transport;
+
+            if (!ESPLoader || !Transport) {
+                throw new Error('esptool-js not loaded. Check CDN script tag.');
+            }
 
             // esptool-js requires the port to be closed before it takes over
             if (serialWriter) { try { await serialWriter.releaseLock(); } catch(_) {} serialWriter = null; }
