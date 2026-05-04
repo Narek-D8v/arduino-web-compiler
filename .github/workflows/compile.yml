@@ -136,8 +136,10 @@ jobs:
           fi
 
           echo "🔨 Compiling for $FQBN..."
-          arduino-cli compile --fqbn "$FQBN" --output-dir ./out build_sketch
+          arduino-cli compile --fqbn "$FQBN" --output-dir ./out --export-binaries build_sketch
           echo "✓ Compilation successful"
+          echo "=== Output files ==="
+          ls -la out/
 
       - name: Push Artifacts
         run: |
@@ -148,40 +150,64 @@ jobs:
           git fetch origin builds || true
           git checkout -B builds
 
-          # Удаляем старые артефакты
           rm -f firmware.hex firmware.bin bootloader.bin partitions.bin boot_app0.bin
 
           BOARD="${{ github.event.client_payload.board }}"
 
           if [[ "$BOARD" == esp32* ]]; then
-            # Основной бинарник приложения
-            [ -f out/build_sketch.ino.bin ] && cp out/build_sketch.ino.bin firmware.bin && echo "✓ firmware.bin"
+            echo "=== ESP32 build artifacts ==="
+            ls -la out/
 
-            # Bootloader — ищем в кэше arduino-esp32 платформы
-            ESP32_PKG=$(find ~/.arduino15/packages/esp32 -name "bootloader_dio_40m.bin" 2>/dev/null | head -1)
-            [ -n "$ESP32_PKG" ] && cp "$ESP32_PKG" bootloader.bin && echo "✓ bootloader.bin ($ESP32_PKG)"
+            echo "=== Searching for ESP32 system files ==="
+            find ~/.arduino15/packages/esp32 -name "*.bin" | sort
 
-            # Partition table — default.csv → default.bin
-            PART_BIN=$(find ~/.arduino15/packages/esp32 -name "default.bin" -path "*/partitions/*" 2>/dev/null | head -1)
-            [ -n "$PART_BIN" ] && cp "$PART_BIN" partitions.bin && echo "✓ partitions.bin ($PART_BIN)"
+            # Основной бинарник
+            cp out/build_sketch.ino.bin firmware.bin && echo "✓ firmware.bin"
+
+            # Bootloader — для ESP32 (40MHz crystal, DIO mode)
+            BOOTLOADER=$(find ~/.arduino15/packages/esp32 -path "*/boot_image/bootloader_dio_40m.bin" | head -1)
+            if [ -z "$BOOTLOADER" ]; then
+              BOOTLOADER=$(find ~/.arduino15/packages/esp32 -name "bootloader_dio_40m.bin" | head -1)
+            fi
+            echo "Bootloader path: $BOOTLOADER"
+            [ -n "$BOOTLOADER" ] && cp "$BOOTLOADER" bootloader.bin && echo "✓ bootloader.bin"
+
+            # Partition table — default 4MB
+            PARTITIONS=$(find ~/.arduino15/packages/esp32 -path "*/partitions/default.bin" | head -1)
+            if [ -z "$PARTITIONS" ]; then
+              PARTITIONS=$(find ~/.arduino15/packages/esp32 -name "default.bin" | head -1)
+            fi
+            echo "Partitions path: $PARTITIONS"
+            [ -n "$PARTITIONS" ] && cp "$PARTITIONS" partitions.bin && echo "✓ partitions.bin"
 
             # boot_app0.bin
-            BOOT_APP=$(find ~/.arduino15/packages/esp32 -name "boot_app0.bin" 2>/dev/null | head -1)
-            [ -n "$BOOT_APP" ] && cp "$BOOT_APP" boot_app0.bin && echo "✓ boot_app0.bin ($BOOT_APP)"
+            BOOT_APP=$(find ~/.arduino15/packages/esp32 -name "boot_app0.bin" | head -1)
+            echo "boot_app0 path: $BOOT_APP"
+            [ -n "$BOOT_APP" ] && cp "$BOOT_APP" boot_app0.bin && echo "✓ boot_app0.bin"
 
-            # Добавляем все что есть
+            # Если не нашли системные файлы — берём из out/ (arduino-cli кладёт их туда тоже)
+            if [ ! -f bootloader.bin ]; then
+              BOOT_OUT=$(find out/ -name "*bootloader*" | head -1)
+              [ -n "$BOOT_OUT" ] && cp "$BOOT_OUT" bootloader.bin && echo "✓ bootloader.bin (from out/)"
+            fi
+            if [ ! -f partitions.bin ]; then
+              PART_OUT=$(find out/ -name "*partition*" | head -1)
+              [ -n "$PART_OUT" ] && cp "$PART_OUT" partitions.bin && echo "✓ partitions.bin (from out/)"
+            fi
+
+            echo "=== Final artifacts ==="
+            ls -la *.bin 2>/dev/null || echo "No .bin files found!"
+
             [ -f firmware.bin   ] && git add firmware.bin
             [ -f bootloader.bin ] && git add bootloader.bin
             [ -f partitions.bin ] && git add partitions.bin
             [ -f boot_app0.bin  ] && git add boot_app0.bin
 
           else
-            # AVR — только .hex
-            [ -f out/build_sketch.ino.hex ] && cp out/build_sketch.ino.hex firmware.hex && echo "✓ firmware.hex"
+            cp out/build_sketch.ino.hex firmware.hex && echo "✓ firmware.hex"
             [ -f firmware.hex ] && git add firmware.hex
           fi
 
-          # Коммитим только если есть staged изменения
           git diff --cached --quiet && echo "No changes to commit" && exit 0
 
           git commit -m "Build: ${{ github.event.client_payload.board }} @ ${{ github.event.client_payload.timestamp }}"
