@@ -663,8 +663,7 @@
     <!-- AVRGirl Arduino (browser build) -->
     <script src="https://unpkg.com/avrgirl-arduino@latest/dist/avrgirl-arduino.global.js"></script>
 
-    <!-- ESPTool for ESP32 -->
-    <script src="https://unpkg.com/esptool-js@0.6.0/bundle.js"></script>
+    <!-- ESPTool for ESP32 — loaded as ES Module via dynamic import() in flashESP32() -->
 
     <script>
         let editor;
@@ -1317,15 +1316,11 @@ void loop() {
 
         // ─── ESP32 flasher via esptool-js ─────────────────────────────────────────
         async function flashESP32(port, binData) {
-            // esptool-js@0.6.0 exposes ESPLoader and Transport directly on window
-            const ESPLoader = window.ESPLoader;
-            const Transport = window.Transport;
+            // bundle.js is an ES Module — must use dynamic import()
+            logToConsole('📦 Loading esptool-js...', 'info');
+            const { ESPLoader, Transport } = await import('https://unpkg.com/esptool-js@0.6.0/bundle.js');
 
-            if (!ESPLoader || !Transport) {
-                throw new Error('esptool-js not loaded. Check CDN script tag.');
-            }
-
-            // esptool-js requires the port to be closed before it takes over
+            // esptool-js takes over the port — release our handles first
             if (serialWriter) { try { await serialWriter.releaseLock(); } catch(_) {} serialWriter = null; }
             if (serialReader) { try { await serialReader.cancel(); await serialReader.releaseLock(); } catch(_) {} serialReader = null; }
             try { await port.close(); } catch(_) {}
@@ -1333,16 +1328,15 @@ void loop() {
             logToConsole('🔌 Creating ESPTool Transport...', 'info');
             const transport = new Transport(port, true);
 
-            // Terminal adapter — pipes esptool output to logToConsole
             const terminal = {
-                clean()          {},
-                writeLine(line)  { logToConsole(`   ${line}`, 'info'); },
-                write(chunk)     { /* raw progress bytes, ignore */ }
+                clean()         {},
+                writeLine(line) { if (line.trim()) logToConsole(`   ${line}`, 'info'); },
+                write(chunk)    {}
             };
 
             const loader = new ESPLoader({
                 transport,
-                baudrate:    921600,   // fast flash baud
+                baudrate:     115200,
                 terminal,
                 debugLogging: false
             });
@@ -1350,39 +1344,37 @@ void loop() {
             logToConsole('🤝 Connecting to ESP32 bootloader (hold BOOT if needed)...', 'info');
             showStatus('flashStatus', 'Connecting to ESP32...', 'info');
 
-            // main_fn() handles chip sync, reset sequence, baud change
-            const chipName = await loader.main_fn();
+            // main() — connects, detects chip, uploads stub, returns chip name
+            const chipName = await loader.main();
             logToConsole(`✓ Connected — chip: ${chipName}`, 'success');
 
-            logToConsole('🗑 Erasing flash...', 'info');
-            showStatus('flashStatus', 'Erasing flash...', 'info');
-            await loader.erase_flash();
-            logToConsole('✓ Flash erased', 'success');
-
-            // Convert Uint8Array → binary string as required by esptool-js
-            const binaryString = Array.from(binData).map(b => String.fromCharCode(b)).join('');
+            // Convert Uint8Array → binary string as required by writeFlash
+            logToConsole('🔧 Preparing firmware data...', 'info');
+            const binaryString = Array.from(binData, b => String.fromCharCode(b)).join('');
 
             logToConsole('⚡ Writing firmware at 0x10000...', 'info');
             showStatus('flashStatus', 'Writing firmware...', 'info');
 
-            await loader.flash_data(
-                binaryString,
-                0x10000,           // standard Arduino-ESP32 app address
-                (written, total) => {
+            await loader.writeFlash({
+                fileArray: [{ data: binaryString, address: 0x10000 }],
+                flashSize:  'keep',
+                flashMode:  'keep',
+                flashFreq:  'keep',
+                eraseAll:   false,
+                compress:   true,
+                reportProgress(fileIndex, written, total) {
                     const pct = Math.round((written / total) * 100);
                     if (pct % 10 === 0) {
                         logToConsole(`   Writing ${pct}% (${written}/${total} bytes)`, 'info');
                         showStatus('flashStatus', `Writing firmware... ${pct}%`, 'info');
                     }
                 }
-            );
+            });
 
             logToConsole('🔄 Resetting ESP32...', 'info');
-            await loader.hard_reset();
+            await loader.hardReset();
 
-            // Release transport so serial monitor can reuse the port
             await transport.disconnect();
-
             logToConsole('✓ ESP32 flashed successfully!', 'success');
         }
 
