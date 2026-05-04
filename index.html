@@ -660,7 +660,7 @@
     <script src="https://unpkg.com/avrgirl-arduino@latest/dist/avrgirl-arduino.global.js"></script>
 
     <!-- ESPTool for ESP32 -->
-    <script src="https://unpkg.com/esptool-js@0.4.0/bundle.js"></script>
+    <script src="https://unpkg.com/esptool-js@0.6.0/bundle.js"></script>
 
     <script>
         let editor;
@@ -991,7 +991,8 @@ void loop() {
 
         // Compile code
         async function compileCode() {
-                const code = editor.getValue();
+                const code      = editor.getValue();
+                const board     = document.getElementById('boardType').value;
                 const compileBtn = document.getElementById('compileBtn');
 
                 compileBtn.disabled = true;
@@ -999,7 +1000,7 @@ void loop() {
                 clearStatus('compileStatus');
                 
                 logToConsole('🔨 Starting compilation...', 'info');
-                logToConsole('Repository: Narek-D8v/arduino-web-compiler', 'info');
+                logToConsole(`Board: ${board.toUpperCase()} | Repo: Narek-D8v/arduino-web-compiler`, 'info');
 
                 try {
                     const response = await fetch('/api/compile', {
@@ -1008,14 +1009,16 @@ void loop() {
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            code: code
+                            code:      code,
+                            board:     board,
+                            timestamp: new Date().toISOString()
                         })
                     });
 
                     const result = await response.json();
 
                     if (result.success) {
-                        showStatus('compileStatus', 'Compilation triggered successfully!', 'success');
+                        showStatus('compileStatus', `Compilation triggered for ${board.toUpperCase()}!`, 'success');
                         logToConsole('✓ Compilation request sent to GitHub Actions', 'success');
                         logToConsole('Check your repository Actions tab for build status', 'info');
                         logToConsole(`Timestamp: ${result.timestamp}`, 'info');
@@ -1303,6 +1306,76 @@ void loop() {
             }
         }
 
+        // ─── Helpers ─────────────────────────────────────────────────────────────
+        function isESP32Board(boardType) {
+            return boardType.startsWith('esp32');
+        }
+
+        // ─── ESP32 flasher via esptool-js ─────────────────────────────────────────
+        async function flashESP32(port, binData) {
+            const { ESPLoader, Transport } = esptooljs;
+
+            // esptool-js requires the port to be closed before it takes over
+            if (serialWriter) { try { await serialWriter.releaseLock(); } catch(_) {} serialWriter = null; }
+            if (serialReader) { try { await serialReader.cancel(); await serialReader.releaseLock(); } catch(_) {} serialReader = null; }
+            try { await port.close(); } catch(_) {}
+
+            logToConsole('🔌 Creating ESPTool Transport...', 'info');
+            const transport = new Transport(port, true);
+
+            // Terminal adapter — pipes esptool output to logToConsole
+            const terminal = {
+                clean()          {},
+                writeLine(line)  { logToConsole(`   ${line}`, 'info'); },
+                write(chunk)     { /* raw progress bytes, ignore */ }
+            };
+
+            const loader = new ESPLoader({
+                transport,
+                baudrate:    921600,   // fast flash baud
+                terminal,
+                debugLogging: false
+            });
+
+            logToConsole('🤝 Connecting to ESP32 bootloader (hold BOOT if needed)...', 'info');
+            showStatus('flashStatus', 'Connecting to ESP32...', 'info');
+
+            // main_fn() handles chip sync, reset sequence, baud change
+            const chipName = await loader.main_fn();
+            logToConsole(`✓ Connected — chip: ${chipName}`, 'success');
+
+            logToConsole('🗑 Erasing flash...', 'info');
+            showStatus('flashStatus', 'Erasing flash...', 'info');
+            await loader.erase_flash();
+            logToConsole('✓ Flash erased', 'success');
+
+            // Convert Uint8Array → binary string as required by esptool-js
+            const binaryString = Array.from(binData).map(b => String.fromCharCode(b)).join('');
+
+            logToConsole('⚡ Writing firmware at 0x10000...', 'info');
+            showStatus('flashStatus', 'Writing firmware...', 'info');
+
+            await loader.flash_data(
+                binaryString,
+                0x10000,           // standard Arduino-ESP32 app address
+                (written, total) => {
+                    const pct = Math.round((written / total) * 100);
+                    if (pct % 10 === 0) {
+                        logToConsole(`   Writing ${pct}% (${written}/${total} bytes)`, 'info');
+                        showStatus('flashStatus', `Writing firmware... ${pct}%`, 'info');
+                    }
+                }
+            );
+
+            logToConsole('🔄 Resetting ESP32...', 'info');
+            await loader.hard_reset();
+
+            // Release transport so serial monitor can reuse the port
+            await transport.disconnect();
+
+            logToConsole('✓ ESP32 flashed successfully!', 'success');
+        }
+
         // ─── Main flash entry point ───────────────────────────────────────────────
         async function flashArduino() {
             if (!serialPort) {
@@ -1312,6 +1385,9 @@ void loop() {
             }
 
             const flashBtn  = document.getElementById('flashBtn');
+            const boardType = document.getElementById('boardType').value;
+            const esp32     = isESP32Board(boardType);
+
             flashBtn.disabled = true;
             flashBtn.innerHTML = '<span><div class="spinner"></div>Flashing...</span>';
             clearStatus('flashStatus');
@@ -1319,65 +1395,68 @@ void loop() {
             const wasReading = isSerialReading;
             if (wasReading) await stopSerialMonitor();
 
-            const flasher = new STK500Flasher(serialPort);
-
             try {
-                // 1. Download firmware.hex (cache-busted)
-                const url = `https://raw.githubusercontent.com/Narek-D8v/arduino-web-compiler/builds/firmware.hex?t=${Date.now()}`;
-                logToConsole('📥 Downloading firmware.hex...', 'info');
+                // ── 1. Download firmware (cache-busted) ──────────────────────────
+                const ext = esp32 ? 'bin' : 'hex';
+                const url = `https://raw.githubusercontent.com/Narek-D8v/arduino-web-compiler/builds/firmware.${ext}?t=${Date.now()}`;
+
+                logToConsole(`📥 Downloading firmware.${ext}...`, 'info');
                 showStatus('flashStatus', 'Downloading firmware...', 'info');
 
                 const resp = await fetch(url, { cache: 'no-store' });
-                if (!resp.ok) throw new Error(`HTTP ${resp.status} — firmware.hex not found in builds branch`);
+                if (!resp.ok) throw new Error(`HTTP ${resp.status} — firmware.${ext} not found in builds branch`);
 
-                const hexText = await resp.text();
-                if (!hexText.trim().startsWith(':'))
-                    throw new Error('Downloaded file is not a valid Intel HEX');
+                const arrayBuf = await resp.arrayBuffer();
+                const binData  = new Uint8Array(arrayBuf);
 
-                logToConsole(`✓ Firmware downloaded (${hexText.length} bytes)`, 'success');
+                logToConsole(`✓ Firmware downloaded — ${binData.length} bytes`, 'success');
 
-                // 2. Parse HEX → binary
-                logToConsole('🔧 Parsing Intel HEX...', 'info');
-                const binary = parseIntelHex(hexText);
-                logToConsole(`✓ Binary size: ${binary.length} bytes`, 'success');
+                // ── 2. Route to the correct flasher ─────────────────────────────
+                if (esp32) {
+                    // ── ESP32 path: esptool-js ───────────────────────────────────
+                    await flashESP32(serialPort, binData);
 
-                // 3. Open port at 115200, pulse DTR to enter bootloader
-                logToConsole('🔌 Opening port at 115200 baud...', 'info');
-                showStatus('flashStatus', 'Connecting to bootloader...', 'info');
-                await flasher.open();
+                } else {
+                    // ── AVR path: STK500v1 (Uno / Nano / Mega / Leonardo) ────────
+                    const flasher = new STK500Flasher(serialPort);
 
-                logToConsole('🔄 Resetting board into bootloader...', 'info');
-                await flasher.resetBoard();
-                await new Promise(r => setTimeout(r, 500));
+                    try {
+                        logToConsole('🔌 Opening port at 115200 baud...', 'info');
+                        showStatus('flashStatus', 'Connecting to bootloader...', 'info');
+                        await flasher.open();
 
-                // 4. Sync with STK500 bootloader
-                logToConsole('🤝 Syncing with STK500 bootloader...', 'info');
-                await flasher.sync();
-                logToConsole('✓ Bootloader sync OK', 'success');
+                        logToConsole('🔄 Resetting board into bootloader...', 'info');
+                        await flasher.resetBoard();
+                        await new Promise(r => setTimeout(r, 500));
 
-                // 5. Enter programming mode
-                await flasher.enterProgMode();
-                logToConsole('✓ Programming mode entered', 'success');
+                        logToConsole('🤝 Syncing with STK500 bootloader...', 'info');
+                        await flasher.sync();
+                        logToConsole('✓ Bootloader sync OK', 'success');
 
-                // 6. Write pages
-                logToConsole('⚡ Writing flash pages...', 'info');
-                showStatus('flashStatus', 'Writing firmware...', 'info');
+                        await flasher.enterProgMode();
+                        logToConsole('✓ Programming mode entered', 'success');
 
-                const totalPages = Math.ceil(binary.length / flasher.PAGE_SIZE);
-                await flasher.flash(binary, (done, total) => {
-                    const pct = Math.round((done / total) * 100);
-                    if (done % 10 === 0 || done === total) {
-                        logToConsole(`   Writing page ${done}/${total} (${pct}%)`, 'info');
-                        showStatus('flashStatus', `Writing firmware... ${pct}%`, 'info');
+                        logToConsole('⚡ Writing flash pages...', 'info');
+                        showStatus('flashStatus', 'Writing firmware...', 'info');
+
+                        await flasher.flash(binData, (done, total) => {
+                            const pct = Math.round((done / total) * 100);
+                            if (done % 10 === 0 || done === total) {
+                                logToConsole(`   Writing page ${done}/${total} (${pct}%)`, 'info');
+                                showStatus('flashStatus', `Writing firmware... ${pct}%`, 'info');
+                            }
+                        });
+
+                        await flasher.leaveProgMode();
+                        logToConsole('✓ Left programming mode', 'success');
+
+                    } finally {
+                        try { await flasher.close(); } catch(_) {}
                     }
-                });
-
-                // 7. Leave programming mode
-                await flasher.leaveProgMode();
-                logToConsole('✓ Left programming mode', 'success');
+                }
 
                 showStatus('flashStatus', 'Flash completed successfully! 🎉', 'success');
-                logToConsole('✓ Done! Arduino flashed successfully.', 'success');
+                logToConsole(`✓ Done! ${boardType.toUpperCase()} flashed successfully.`, 'success');
                 logToConsole('Your device is now running the new firmware.', 'success');
 
             } catch (err) {
@@ -1385,19 +1464,15 @@ void loop() {
                 logToConsole(`✗ Flash error: ${err.message}`, 'error');
                 console.error('Full flash error:', err);
             } finally {
-                try { await flasher.close(); } catch(_) {}
-
-                // Reopen port for serial monitor if it was running
-                if (wasReading || serialWriter === null) {
-                    try {
-                        const baud = parseInt(document.getElementById('baudRate').value);
-                        await serialPort.open({ baudRate: baud });
-                        serialWriter = serialPort.writable.getWriter();
-                        document.getElementById('portStatus').innerHTML =
-                            `<span class="text-accent-primary">● Reconnected at ${baud} baud</span>`;
-                        if (wasReading) setTimeout(() => startSerialMonitor(), 500);
-                    } catch(_) {}
-                }
+                // Reopen port for serial monitor
+                try {
+                    const baud = parseInt(document.getElementById('baudRate').value);
+                    await serialPort.open({ baudRate: baud });
+                    serialWriter = serialPort.writable.getWriter();
+                    document.getElementById('portStatus').innerHTML =
+                        `<span class="text-accent-primary">● Reconnected at ${baud} baud</span>`;
+                    if (wasReading) setTimeout(() => startSerialMonitor(), 800);
+                } catch(_) {}
 
                 flashBtn.disabled = false;
                 flashBtn.innerHTML = '<span>⚡ Flash Device</span>';
