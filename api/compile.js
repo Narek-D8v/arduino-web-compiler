@@ -26,8 +26,8 @@ module.exports = async (req, res) => {
     }
 
     try {
-        // Получаем код из тела запроса
-        const { code } = req.body;
+        // Получаем поля из тела запроса
+        const { code, board, timestamp } = req.body;
 
         if (!code) {
             return res.status(400).json({ 
@@ -64,9 +64,10 @@ module.exports = async (req, res) => {
                 body: JSON.stringify({
                     event_type: 'compile_cmd',
                     client_payload: {
-                        code: code,
-                        timestamp: new Date().toISOString(),
-                        source: 'web-interface'
+                        code:      code,
+                        board:     board || 'uno',
+                        timestamp: timestamp || new Date().toISOString(),
+                        source:    'web-interface'
                     }
                 })
             }
