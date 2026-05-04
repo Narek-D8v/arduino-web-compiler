@@ -1316,7 +1316,6 @@ void loop() {
 
         // ─── ESP32 flasher via esptool-js ─────────────────────────────────────────
         async function flashESP32(port, binData) {
-            // bundle.js is an ES Module — must use dynamic import()
             logToConsole('📦 Loading esptool-js...', 'info');
             const { ESPLoader, Transport } = await import('https://unpkg.com/esptool-js@0.6.0/bundle.js');
 
@@ -1334,46 +1333,65 @@ void loop() {
                 write(chunk)    {}
             };
 
-            const loader = new ESPLoader({
-                transport,
-                baudrate:     115200,
-                terminal,
-                debugLogging: false
-            });
+            const loader = new ESPLoader({ transport, baudrate: 115200, terminal, debugLogging: false });
 
             logToConsole('🤝 Connecting to ESP32 bootloader (hold BOOT if needed)...', 'info');
             showStatus('flashStatus', 'Connecting to ESP32...', 'info');
 
-            // main() — connects, detects chip, uploads stub, returns chip name
             const chipName = await loader.main();
             logToConsole(`✓ Connected — chip: ${chipName}`, 'success');
 
-            // Convert Uint8Array → binary string as required by writeFlash
-            logToConsole('🔧 Preparing firmware data...', 'info');
-            const binaryString = Array.from(binData, b => String.fromCharCode(b)).join('');
+            // ── Download all 4 required ESP32 files ─────────────────────────────
+            const BASE = `https://raw.githubusercontent.com/Narek-D8v/arduino-web-compiler/builds`;
+            const t    = Date.now();
 
-            logToConsole('⚡ Writing firmware at 0x10000...', 'info');
+            const filesToFlash = [
+                { url: `${BASE}/bootloader.bin?t=${t}`,  address: 0x1000,  label: 'bootloader.bin'  },
+                { url: `${BASE}/partitions.bin?t=${t}`,  address: 0x8000,  label: 'partitions.bin'  },
+                { url: `${BASE}/boot_app0.bin?t=${t}`,   address: 0xe000,  label: 'boot_app0.bin'   },
+                { url: `${BASE}/firmware.bin?t=${t}`,    address: 0x10000, label: 'firmware.bin'     },
+            ];
+
+            logToConsole('📥 Downloading ESP32 flash files...', 'info');
+            showStatus('flashStatus', 'Downloading files...', 'info');
+
+            const fileArray = [];
+            for (const f of filesToFlash) {
+                const resp = await fetch(f.url, { cache: 'no-store' });
+                if (!resp.ok) {
+                    logToConsole(`⚠ ${f.label} not found (${resp.status}) — skipping`, 'warning');
+                    continue;
+                }
+                const buf    = await resp.arrayBuffer();
+                const binary = Array.from(new Uint8Array(buf), b => String.fromCharCode(b)).join('');
+                fileArray.push({ data: binary, address: f.address });
+                logToConsole(`   ✓ ${f.label} — ${buf.byteLength} bytes @ 0x${f.address.toString(16)}`, 'success');
+            }
+
+            if (fileArray.length === 0) throw new Error('No flash files found in builds branch');
+
+            logToConsole(`⚡ Flashing ${fileArray.length} file(s)...`, 'info');
             showStatus('flashStatus', 'Writing firmware...', 'info');
 
             await loader.writeFlash({
-                fileArray: [{ data: binaryString, address: 0x10000 }],
+                fileArray,
                 flashSize:  'keep',
                 flashMode:  'keep',
                 flashFreq:  'keep',
                 eraseAll:   false,
                 compress:   true,
                 reportProgress(fileIndex, written, total) {
-                    const pct = Math.round((written / total) * 100);
-                    if (pct % 10 === 0) {
-                        logToConsole(`   Writing ${pct}% (${written}/${total} bytes)`, 'info');
-                        showStatus('flashStatus', `Writing firmware... ${pct}%`, 'info');
+                    const pct  = Math.round((written / total) * 100);
+                    const name = filesToFlash[fileIndex]?.label ?? `file ${fileIndex}`;
+                    if (pct % 20 === 0 || written === total) {
+                        logToConsole(`   ${name}: ${pct}%`, 'info');
+                        showStatus('flashStatus', `Writing ${name}... ${pct}%`, 'info');
                     }
                 }
             });
 
             logToConsole('🔄 Resetting ESP32...', 'info');
             await loader.hardReset();
-
             await transport.disconnect();
             logToConsole('✓ ESP32 flashed successfully!', 'success');
         }
@@ -1398,27 +1416,22 @@ void loop() {
             if (wasReading) await stopSerialMonitor();
 
             try {
-                // ── 1. Download firmware (cache-busted) ──────────────────────────
-                const ext = esp32 ? 'bin' : 'hex';
-                const url = `https://raw.githubusercontent.com/Narek-D8v/arduino-web-compiler/builds/firmware.${ext}?t=${Date.now()}`;
-
-                logToConsole(`📥 Downloading firmware.${ext}...`, 'info');
-                showStatus('flashStatus', 'Downloading firmware...', 'info');
-
-                const resp = await fetch(url, { cache: 'no-store' });
-                if (!resp.ok) throw new Error(`HTTP ${resp.status} — firmware.${ext} not found in builds branch`);
-
-                const arrayBuf = await resp.arrayBuffer();
-                const binData  = new Uint8Array(arrayBuf);
-
-                logToConsole(`✓ Firmware downloaded — ${binData.length} bytes`, 'success');
-
-                // ── 2. Route to the correct flasher ─────────────────────────────
+                // ── 1. Download firmware ────────────────────────────────────────────
                 if (esp32) {
-                    // ── ESP32 path: esptool-js ───────────────────────────────────
-                    await flashESP32(serialPort, binData);
-
+                    // ESP32 downloads all 4 files internally in flashESP32()
+                    logToConsole('⚡ Starting ESP32 flash sequence...', 'info');
+                    await flashESP32(serialPort, null);
                 } else {
+                    // ── AVR: download .hex then flash via STK500 ─────────────────────
+                    const url = `https://raw.githubusercontent.com/Narek-D8v/arduino-web-compiler/builds/firmware.hex?t=${Date.now()}`;
+                    logToConsole('📥 Downloading firmware.hex...', 'info');
+                    showStatus('flashStatus', 'Downloading firmware...', 'info');
+
+                    const resp = await fetch(url, { cache: 'no-store' });
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status} — firmware.hex not found in builds branch`);
+
+                    const binData = new Uint8Array(await resp.arrayBuffer());
+                    logToConsole(`✓ Firmware downloaded — ${binData.length} bytes`, 'success');
                     // ── AVR path: STK500v1 (Uno / Nano / Mega / Leonardo) ────────
                     const flasher = new STK500Flasher(serialPort);
 
