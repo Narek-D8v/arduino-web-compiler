@@ -1,4 +1,4 @@
-name: Arduino Remote Compile
+name: Arduino & ESP32 Remote Compile
 
 on:
   repository_dispatch:
@@ -16,104 +16,65 @@ jobs:
         with:
           ref: main
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-
       - name: Setup Arduino CLI
         uses: arduino/setup-arduino-cli@v2
 
-      - name: Install AVR Platform
+      - name: Install Platforms
         run: |
           arduino-cli core update-index
+          # Ставим AVR для Uno/Nano
           arduino-cli core install arduino:avr
+          # Ставим поддержку ESP32
+          arduino-cli core update-index --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core install esp32:esp32 --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
 
-      - name: Write Sketch File
+      - name: Write Sketch
         run: |
           mkdir -p build_sketch
           cat << 'ARDUINO_SKETCH_END' > build_sketch/build_sketch.ino
           ${{ github.event.client_payload.code }}
           ARDUINO_SKETCH_END
 
-      - name: Install & Sync Libraries
+      - name: Install Libraries
         run: |
-          # 1. Базовая настройка CLI
-          arduino-cli config init --overwrite
-          arduino-cli config set library.enable_unsafe_install true
           arduino-cli lib update-index
-          
-          LIBS_PATH="$HOME/Arduino/libraries"
-          mkdir -p "$LIBS_PATH"
-          
-          # 2. Принудительная установка базовых библиотек Adafruit
-          echo "📥 Installing standard dependencies..."
-          arduino-cli lib install "Adafruit GFX Library"
-          arduino-cli lib install "Adafruit BusIO"
-
-          # 3. Обработка твоей папки /libraries
-          CUSTOM_DIR="libraries"
-          if [ -d "$CUSTOM_DIR" ]; then
-            echo "🔍 Processing /$CUSTOM_DIR..."
-            
-            # Установка ZIP-архивов (Animation.zip и др.)
-            find "$CUSTOM_DIR" -maxdepth 1 -name "*.zip" -type f | while read ZIP; do
-              echo "📦 Installing ZIP: $(basename "$ZIP")"
-              arduino-cli lib install --zip-path "$ZIP" || echo "❌ Failed to install $ZIP"
-            done
-
-            # Установка одиночных .h файлов
-            find "$CUSTOM_DIR" -maxdepth 1 -name "*.h" -type f | while read H_FILE; do
-              LIB_NAME=$(basename "$H_FILE" .h)
-              echo "📄 Installing loose header: $LIB_NAME"
-              mkdir -p "$LIBS_PATH/$LIB_NAME"
-              cp "$H_FILE" "$LIBS_PATH/$LIB_NAME/"
-            done
-
-            # Копирование готовых папок библиотек
-            find "$CUSTOM_DIR" -maxdepth 1 -mindepth 1 -type d | while read DIR; do
-              BN=$(basename "$DIR")
-              [[ "$BN" == .* ]] && continue
-              echo "📂 Copying folder: $BN"
-              cp -r "$DIR" "$LIBS_PATH/"
-            done
+          # Если в коде есть дисплей, ставим зависимости
+          arduino-cli lib install "Adafruit GFX Library" "Adafruit BusIO" "Adafruit SSD1306"
+          # Твои кастомные либы из папки /libraries
+          if [ -d "libraries" ]; then
+            cp -r libraries/* $HOME/Arduino/libraries/ || true
           fi
 
-          # 4. Автоматический поиск библиотек по #include в скетче
-          SKETCH="build_sketch/build_sketch.ino"
-          # Ищем строки типа #include <Library.h> или "Library.h"
-          INCLUDES=$(grep -oP '(?<=#include\s[<"])[\w./]+\.h' "$SKETCH" || true)
-          
-          for H in $INCLUDES; do
-            # Пропускаем стандартные системные библиотеки
-            case "$H" in Arduino.h|avr/*.h|util/*.h|pgmspace.h|interrupt.h|Wire.h|SPI.h) continue ;; esac
-            
-            LIB_G="${H%.h}"
-            # Если библиотека еще не установлена вручную, пробуем найти её в реестре
-            if [ ! -d "$LIBS_PATH/$LIB_G" ]; then
-              echo "📥 Auto-searching in registry: $LIB_G"
-              arduino-cli lib install "$LIB_G" || echo "⚠️ $LIB_G not found in official registry"
-            fi
-          done
-
-      - name: Run Compiler
+      - name: Compile
         run: |
-          echo "🔨 Starting build for Arduino Uno..."
-          # Компилируем и сохраняем результат в папку ./out
-          arduino-cli compile --fqbn arduino:avr:uno --output-dir ./out build_sketch
+          # Выбираем FQBN на основе данных из Payload (от твоего сайта)
+          # Если плата не передана, по умолчанию Uno
+          BOARD="${{ github.event.client_payload.board }}"
+          if [[ "$BOARD" == "esp32" ]]; then
+            FQBN="esp32:esp32:esp32"
+          else
+            FQBN="arduino:avr:uno"
+          fi
+          
+          echo "🔨 Compiling for $FQBN..."
+          arduino-cli compile --fqbn $FQBN --output-dir ./out build_sketch
 
-      - name: Push Firmware to Builds
+      - name: Push Artifacts
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
-
-          # Переключаемся на ветку builds (создаем её, если нет)
+          
           git fetch origin builds || true
           git checkout -B builds
 
-          # Копируем скомпилированный hex файл
-          cp out/build_sketch.ino.hex firmware.hex
-          git add firmware.hex
-          git commit -m "Build: ${{ github.event.client_payload.timestamp }}" || echo "No changes to commit"
+          # Очищаем старые билды
+          rm -f firmware.hex firmware.bin
+
+          # Сохраняем нужный формат в зависимости от того, что скомпилировалось
+          [ -f out/build_sketch.ino.hex ] && cp out/build_sketch.ino.hex firmware.hex
+          [ -f out/build_sketch.ino.bin ] && cp out/build_sketch.ino.bin firmware.bin
+
+          git add firmware.hex firmware.bin
+          git commit -m "Build for ${{ github.event.client_payload.board }} at ${{ github.event.client_payload.timestamp }}"
           git push origin builds --force
