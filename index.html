@@ -8,10 +8,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-    <link rel="manifest" href="/site.webmanifest">
     <style>
         :root {
             --bg-primary: #0a0e17;
@@ -998,22 +994,34 @@ void loop() {
                 const board     = document.getElementById('boardType').value;
                 const compileBtn = document.getElementById('compileBtn');
 
+                // FQBN map — точное соответствие платы
+                const FQBN_MAP = {
+                    'uno':         'arduino:avr:uno',
+                    'nano':        'arduino:avr:nano',
+                    'mega':        'arduino:avr:mega',
+                    'leonardo':    'arduino:avr:leonardo',
+                    'esp32':       'esp32:esp32:esp32doit-devkit-v1',  // DevKit с LED на GPIO2
+                    'esp32-s2':    'esp32:esp32:esp32s2',
+                    'esp32-s3':    'esp32:esp32:esp32s3',
+                    'esp32-c3':    'esp32:esp32:esp32c3',
+                };
+                const fqbn = FQBN_MAP[board] || 'arduino:avr:uno';
+
                 compileBtn.disabled = true;
                 compileBtn.innerHTML = '<span><div class="spinner"></div>Compiling...</span>';
                 clearStatus('compileStatus');
-                
+
                 logToConsole('🔨 Starting compilation...', 'info');
-                logToConsole(`Board: ${board.toUpperCase()} | Repo: Narek-D8v/arduino-web-compiler`, 'info');
+                logToConsole(`Board: ${board.toUpperCase()} | FQBN: ${fqbn}`, 'info');
 
                 try {
                     const response = await fetch('/api/compile', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            code:      code,
-                            board:     board,
+                            code,
+                            board,
+                            fqbn,
                             timestamp: new Date().toISOString()
                         })
                     });
@@ -1712,7 +1720,114 @@ void loop() {
             logToConsole('✓ Web Serial API is available', 'success');
         }
 
-        // ─── Library Manager ─────────────────────────────────────────────────────
+        // ─── Intel HEX parser (used by arduino-uploader & STK500Flasher) ────────
+        function parseIntelHex(hexText) {
+            const pages = [];
+            let baseAddr = 0;
+            for (const rawLine of hexText.split('\n')) {
+                const line = rawLine.trim();
+                if (!line.startsWith(':')) continue;
+                const bytes     = line.slice(1).match(/.{2}/g).map(b => parseInt(b, 16));
+                const byteCount = bytes[0];
+                const addr      = (bytes[1] << 8) | bytes[2];
+                const recType   = bytes[3];
+                const data      = bytes.slice(4, 4 + byteCount);
+                if      (recType === 0x00) { pages.push({ address: baseAddr + addr, data }); }
+                else if (recType === 0x02) { baseAddr = ((data[0] << 8) | data[1]) << 4; }
+                else if (recType === 0x04) { baseAddr = ((data[0] << 8) | data[1]) << 16; }
+                else if (recType === 0x01) { break; }
+            }
+            if (pages.length === 0) throw new Error('HEX file contains no data records');
+            const maxAddr = Math.max(...pages.map(p => p.address + p.data.length));
+            const binary  = new Uint8Array(maxAddr).fill(0xFF);
+            pages.forEach(p => binary.set(p.data, p.address));
+            return binary;
+        }
+
+        // ─── <arduino-uploader> Web Component ────────────────────────────────────
+        customElements.define('arduino-uploader', class extends HTMLElement {
+            connectedCallback() {
+                this._board  = this.getAttribute('board')    || 'uno';
+                this._hexUrl = this.getAttribute('hex-file') || null;
+                this._render();
+            }
+
+            _render() {
+                this.innerHTML = `
+                    <button class="btn btn-primary" style="width:100%">
+                        <span>⚡ ${this.getAttribute('label') || 'Flash Arduino'}</span>
+                    </button>`;
+                this.querySelector('button').onclick = () => this.flash();
+            }
+
+            async flash(hexUrl, board) {
+                const url   = hexUrl  || this._hexUrl;
+                const brd   = board   || this._board;
+                const btn   = this.querySelector('button');
+                btn.disabled = true;
+                btn.innerHTML = '<span><div class="spinner" style="display:inline-block"></div> Flashing...</span>';
+
+                try {
+                    if (!navigator.serial) throw new Error('Web Serial API not supported. Use Chrome/Edge.');
+
+                    // 1. Select port
+                    const port = await navigator.serial.requestPort({
+                        filters: [
+                            { usbVendorId: 0x2341 },
+                            { usbVendorId: 0x1a86 },
+                            { usbVendorId: 0x0403 },
+                        ]
+                    });
+
+                    // 2. Download HEX
+                    logToConsole(`📥 [arduino-uploader] Downloading ${url || 'firmware.hex'}...`, 'info');
+                    const finalUrl = url
+                        ? `${url}?t=${Date.now()}`
+                        : `https://raw.githubusercontent.com/Narek-D8v/arduino-web-compiler/builds/firmware.hex?t=${Date.now()}`;
+
+                    const resp = await fetch(finalUrl, { cache: 'no-store' });
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status} — HEX file not found`);
+                    const hexText = await resp.text();
+                    if (!hexText.trim().startsWith(':')) throw new Error('Not a valid Intel HEX file');
+                    logToConsole(`✓ Downloaded — ${hexText.length} bytes`, 'success');
+
+                    // 3. Flash via STK500
+                    const flasher = new STK500Flasher(port);
+                    await flasher.open();
+                    await flasher.resetBoard();
+                    await new Promise(r => setTimeout(r, 500));
+                    await flasher.sync();
+                    await flasher.enterProgMode();
+
+                    const binary = parseIntelHex(hexText);
+                    await flasher.flash(binary, (done, total) => {
+                        const pct = Math.round(done / total * 100);
+                        if (done % 10 === 0 || done === total)
+                            logToConsole(`   Page ${done}/${total} (${pct}%)`, 'info');
+                    });
+
+                    await flasher.leaveProgMode();
+                    await flasher.close();
+
+                    logToConsole('✓ [arduino-uploader] Done!', 'success');
+                    btn.innerHTML = '<span>✓ Flashed!</span>';
+                    setTimeout(() => { btn.innerHTML = '<span>⚡ Flash Arduino</span>'; btn.disabled = false; }, 3000);
+
+                } catch (err) {
+                    logToConsole(`✗ [arduino-uploader] ${err.message}`, 'error');
+                    btn.innerHTML = '<span>✗ Failed — Retry</span>';
+                    btn.disabled = false;
+                }
+            }
+        });
+
+        // Expose global flash function for plain <button> usage
+        window.arduinoFlash = async (hexFile, board) => {
+            const dummy = document.createElement('arduino-uploader');
+            document.body.appendChild(dummy);
+            await dummy.flash(hexFile, board);
+            document.body.removeChild(dummy);
+        };
 
         const POPULAR_LIBRARIES = [
             { name: 'Servo',           header: 'Servo.h',           tag: 'Actuators',   desc: 'Control servo motors with precise angle positioning.' },
