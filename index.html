@@ -9,11 +9,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-
     <link rel="manifest" href="/site.webmanifest">
     <style>
         :root {
@@ -566,12 +563,12 @@
 
             <div class="card">
                 <h3 class="text-lg font-bold mb-4 text-accent-secondary" style="font-family: 'Syne', sans-serif;">Flash</h3>
-                
+
                 <!-- Board and Baud Rate Selection -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
                         <label class="label">Board Type</label>
-                        <select id="boardType" class="input-field">
+                        <select id="boardType" class="input-field" onchange="onBoardChange()">
                             <option value="uno">Arduino Uno</option>
                             <option value="nano">Arduino Nano</option>
                             <option value="mega">Arduino Mega</option>
@@ -594,20 +591,52 @@
                     </div>
                 </div>
 
-                <!-- Connect and Flash Buttons -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                    <button class="btn btn-secondary w-full" onclick="connectSerial()" id="connectBtn">
-                        <span>🔌 Connect to Board</span>
+                <!-- AVR: arduino-web-uploader button (shown for Uno/Nano/Mega/Leonardo) -->
+                <div id="avrFlashSection">
+                    <label class="label mb-2">Connect &amp; Flash (AVR)</label>
+                    <!-- arduino-web-uploader auto-attaches to [arduino-uploader] buttons -->
+                    <button
+                        arduino-uploader
+                        id="avrUploaderBtn"
+                        hex-href=""
+                        board="uno"
+                        class="btn btn-primary w-full"
+                        style="position:relative;"
+                    >
+                        <span>⚡ Flash Arduino</span>
+                        <span class="upload-progress" style="position:absolute;right:1rem;font-size:0.8rem;"></span>
                     </button>
-                    <button class="btn btn-primary w-full" onclick="flashArduino()" id="flashBtn" disabled>
-                        <span>⚡ Flash Device</span>
+                    <p class="text-text-secondary text-sm mt-2">Powered by <a href="https://github.com/dbuezas/arduino-web-uploader" target="_blank" style="color:var(--accent-secondary)">dbuezas/arduino-web-uploader</a></p>
+                </div>
+
+                <!-- ESP32: esp-web-tools install button (shown for ESP32 boards) -->
+                <div id="espFlashSection" style="display:none;">
+                    <label class="label mb-2">Flash ESP32</label>
+                    <!-- esp-web-tools reads manifest.json which lists all 4 binary files + addresses -->
+                    <esp-web-install-button
+                        id="espInstallBtn"
+                        manifest=""
+                        style="display:block;"
+                    >
+                        <button slot="activate" class="btn btn-primary w-full">
+                            <span>⚡ Flash ESP32</span>
+                        </button>
+                        <span slot="unsupported" style="color:var(--error);">
+                            ✗ Web Serial not supported. Use Chrome/Edge.
+                        </span>
+                    </esp-web-install-button>
+                    <p class="text-text-secondary text-sm mt-2">Powered by <a href="https://esphome.github.io/esp-web-tools/" target="_blank" style="color:var(--accent-secondary)">esp-web-tools</a> (Nabu Casa)</p>
+                </div>
+
+                <!-- Connect button for Serial Monitor only -->
+                <div class="mt-4">
+                    <button class="btn btn-secondary w-full" onclick="connectSerial()" id="connectBtn">
+                        <span>🔌 Connect for Serial Monitor</span>
                     </button>
                 </div>
 
-                <div id="flashStatus" class="mb-4"></div>
-
-                <!-- Connection Status -->
-                <div id="portStatus" class="text-sm text-text-secondary"></div>
+                <div id="flashStatus" class="mt-4"></div>
+                <div id="portStatus" class="text-sm text-text-secondary mt-2"></div>
             </div>
         </div>
 
@@ -665,6 +694,12 @@
     
     <!-- AVRGirl Arduino (browser build) -->
     <script src="https://unpkg.com/avrgirl-arduino@latest/dist/avrgirl-arduino.global.js"></script>
+
+    <!-- Arduino Web Uploader by dbuezas — proven STK500 flasher for AVR boards -->
+    <script src="https://github.com/dbuezas/arduino-web-uploader/releases/download/v1.1.2/main.js"></script>
+
+    <!-- ESP Web Tools by Nabu Casa — proven ESP32/ESP8266 flasher (used in Home Assistant) -->
+    <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 
     <!-- ESPTool for ESP32 — loaded as ES Module via dynamic import() in flashESP32() -->
 
