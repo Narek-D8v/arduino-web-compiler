@@ -27,7 +27,7 @@ module.exports = async (req, res) => {
 
     try {
         // Получаем поля из тела запроса
-        const { code, board, fqbn, timestamp } = req.body;
+        const { code, files, board, fqbn, timestamp } = req.body;
 
         if (!code) {
             return res.status(400).json({ 
@@ -35,6 +35,19 @@ module.exports = async (req, res) => {
                 error: 'Code is required in request body' 
             });
         }
+
+        const cleanFiles = Array.isArray(files)
+            ? files.slice(0, 20).map(file => ({
+                name: String(file.name || '')
+                    .replace(/\\/g, '/')
+                    .split('/')
+                    .pop()
+                    .replace(/[^a-zA-Z0-9._-]/g, '_')
+                    .replace(/^\.+/, '')
+                    .slice(0, 64),
+                content: String(file.content || '').slice(0, 120000)
+            })).filter(file => file.name)
+            : [];
 
         // Проверяем наличие токена в переменных окружения
         const githubToken = process.env.MY_GITHUB_TOKEN;
@@ -65,6 +78,7 @@ module.exports = async (req, res) => {
                     event_type: 'compile_cmd',
                     client_payload: {
                         code:      code,
+                        files:     cleanFiles,
                         board:     board || 'uno',
                         fqbn:      fqbn || '',
                         timestamp: timestamp || new Date().toISOString(),
