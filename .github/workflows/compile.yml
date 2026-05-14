@@ -33,6 +33,41 @@ jobs:
           ${{ github.event.client_payload.code }}
           ARDUINO_SKETCH_END
 
+      - name: Write Project Files
+        env:
+          PROJECT_FILES_JSON: ${{ toJson(github.event.client_payload.files) }}
+        run: |
+          python3 <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          raw = os.environ.get("PROJECT_FILES_JSON") or "[]"
+          try:
+              files = json.loads(raw)
+          except json.JSONDecodeError:
+              files = []
+          if not isinstance(files, list):
+              files = []
+
+          out_dir = Path("build_sketch")
+          out_dir.mkdir(exist_ok=True)
+          allowed_exts = {".h", ".hpp", ".hh", ".c", ".cpp", ".cc", ".ino", ".txt", ".json"}
+
+          for item in files[:20]:
+              name = str(item.get("name", ""))
+              name = name.replace("\\", "/").split("/")[-1]
+              name = re.sub(r"[^A-Za-z0-9._-]", "_", name).lstrip(".")[:64]
+              if not name or name == "build_sketch.ino":
+                  continue
+              if Path(name).suffix.lower() not in allowed_exts:
+                  continue
+              content = str(item.get("content", ""))[:120000]
+              (out_dir / name).write_text(content, encoding="utf-8", newline="\n")
+              print(f"Wrote project file: {name}")
+          PY
+
       - name: Install Libraries
         run: |
           arduino-cli lib update-index
@@ -98,8 +133,7 @@ jobs:
             ["Ethernet.h"]="Ethernet"
           )
 
-          SKETCH="build_sketch/build_sketch.ino"
-          INCLUDES=$(grep -oP '(?<=#include\s[<"])[\w./]+\.h' "$SKETCH" || true)
+          INCLUDES=$(grep -RhoP '(?<=#include\s[<"])[\w./]+\.h' build_sketch || true)
           echo "Found includes: $INCLUDES"
 
           for HEADER in $INCLUDES; do
