@@ -373,6 +373,7 @@ function switchFile(name){
   monaco.editor.setModelLanguage(editor.getModel(), fileLanguage(file.name));
   renderFileTabs();
   saveProjectFiles();
+  scheduleDiagnostics();
 }
 
 function renderFileTabs(){
@@ -421,6 +422,7 @@ function newProjectFile(){
   monaco.editor.setModelLanguage(editor.getModel(), fileLanguage(name));
   renderFileTabs();
   saveProjectFiles();
+  scheduleDiagnostics();
 }
 
 function removeProjectFile(name){
@@ -433,6 +435,7 @@ function removeProjectFile(name){
   monaco.editor.setModelLanguage(editor.getModel(), fileLanguage(file.name));
   renderFileTabs();
   saveProjectFiles();
+  scheduleDiagnostics();
 }
 
 async function attachProjectFiles(input){
@@ -450,8 +453,175 @@ async function attachProjectFiles(input){
     monaco.editor.setModelLanguage(editor.getModel(), fileLanguage(file.name));
     renderFileTabs();
     saveProjectFiles();
+    scheduleDiagnostics();
   }
   input.value = '';
+}
+
+let diagnosticsTimer = null;
+
+function isCodeFile(name){
+  const ext = name.split('.').pop().toLowerCase();
+  return ['ino','cpp','c','h','hpp','hh','cc'].includes(ext);
+}
+
+function stripLineComment(line){
+  let out = '';
+  let quote = null;
+  for (let i = 0; i < line.length; i++){
+    const ch = line[i], next = line[i + 1];
+    if (quote){
+      out += ch;
+      if (ch === '\\'){
+        out += next || '';
+        i++;
+      } else if (ch === quote){
+        quote = null;
+      }
+      continue;
+    }
+    if (ch === '"' || ch === "'"){
+      quote = ch;
+      out += ch;
+      continue;
+    }
+    if (ch === '/' && next === '/') break;
+    out += ch;
+  }
+  return out;
+}
+
+function marker(line, col, message, severity){
+  return {
+    startLineNumber: line,
+    startColumn: Math.max(1, col),
+    endLineNumber: line,
+    endColumn: Math.max(2, col + 1),
+    message,
+    severity
+  };
+}
+
+function runLightDiagnostics(){
+  if (!editor || !window.monaco) return;
+  const file = currentFile();
+  const model = editor.getModel();
+  if (!file || !model || !isCodeFile(file.name)){
+    monaco.editor.setModelMarkers(model, 'arduino-lite', []);
+    return;
+  }
+
+  const Severity = monaco.MarkerSeverity;
+  const text = model.getValue();
+  const lines = text.split('\n');
+  const markers = [];
+  const stack = [];
+  let blockComment = false;
+
+  lines.forEach((raw, idx)=>{
+    const lineNo = idx + 1;
+    let line = raw;
+    let code = '';
+    let quote = null;
+    let stringStart = 0;
+
+    for (let i = 0; i < line.length; i++){
+      const ch = line[i], next = line[i + 1];
+
+      if (blockComment){
+        if (ch === '*' && next === '/'){
+          blockComment = false;
+          i++;
+        }
+        continue;
+      }
+
+      if (quote){
+        code += ' ';
+        if (ch === '\\'){
+          code += ' ';
+          i++;
+        } else if (ch === quote){
+          quote = null;
+        }
+        continue;
+      }
+
+      if (ch === '/' && next === '*'){
+        blockComment = true;
+        i++;
+        continue;
+      }
+      if (ch === '/' && next === '/') break;
+      if (ch === '"' || ch === "'"){
+        quote = ch;
+        stringStart = i + 1;
+        code += ' ';
+        continue;
+      }
+      code += ch;
+    }
+
+    if (quote){
+      markers.push(marker(lineNo, stringStart, 'Unclosed string or character literal', Severity.Error));
+    }
+
+    const trimmed = stripLineComment(raw).trim();
+    if (/^#\s*include\b/.test(trimmed) && !/^#\s*include\s*(<[^>]+>|"[^"]+")/.test(trimmed)){
+      markers.push(marker(lineNo, raw.indexOf('include') + 1, 'Expected #include <Header.h> or #include "Header.h"', Severity.Warning));
+    }
+    if (/^\s*#include\s+[<"][^>"]+[>"]\s*;/.test(raw)){
+      markers.push(marker(lineNo, raw.lastIndexOf(';') + 1, '#include lines should not end with semicolon', Severity.Warning));
+    }
+
+    for (let i = 0; i < code.length; i++){
+      const ch = code[i];
+      if ('({['.includes(ch)){
+        stack.push({ ch, line:lineNo, col:i + 1 });
+      } else if (')}]'.includes(ch)){
+        const expected = ch === ')' ? '(' : ch === '}' ? '{' : '[';
+        const top = stack[stack.length - 1];
+        if (!top || top.ch !== expected){
+          markers.push(marker(lineNo, i + 1, `Unexpected '${ch}'`, Severity.Error));
+        } else {
+          stack.pop();
+        }
+      }
+    }
+
+    const typoChecks = [
+      { re:/\bSerial\.Begin\s*\(/, msg:'Did you mean Serial.begin(...) ?' },
+      { re:/\bserial\./, msg:'Arduino Serial is capitalized: Serial' },
+      { re:/\bdigitalwrite\s*\(/, msg:'Did you mean digitalWrite(...) ?' },
+      { re:/\banalogwrite\s*\(/, msg:'Did you mean analogWrite(...) ?' },
+      { re:/\bpinmode\s*\(/, msg:'Did you mean pinMode(...) ?' },
+      { re:/\bDelay\s*\(/, msg:'Did you mean delay(...) ?' },
+    ];
+    typoChecks.forEach(check=>{
+      const match = raw.match(check.re);
+      if (match) markers.push(marker(lineNo, match.index + 1, check.msg, Severity.Warning));
+    });
+  });
+
+  stack.slice(-30).forEach(item=>{
+    markers.push(marker(item.line, item.col, `Unclosed '${item.ch}'`, Severity.Error));
+  });
+
+  if (file.name === 'sketch.ino'){
+    if (!/\bvoid\s+setup\s*\(\s*\)/.test(text)){
+      markers.push(marker(1, 1, 'Main sketch usually needs void setup()', Severity.Warning));
+    }
+    if (!/\bvoid\s+loop\s*\(\s*\)/.test(text)){
+      markers.push(marker(1, 1, 'Main sketch usually needs void loop()', Severity.Warning));
+    }
+  }
+
+  monaco.editor.setModelMarkers(model, 'arduino-lite', markers);
+}
+
+function scheduleDiagnostics(){
+  clearTimeout(diagnosticsTimer);
+  diagnosticsTimer = setTimeout(runLightDiagnostics, 180);
 }
 
 require.config({ paths:{ vs:'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' }});
@@ -519,7 +689,9 @@ require(['vs/editor/editor.main'], ()=>{
   editor.onDidChangeModelContent(()=>{
     syncActiveFile();
     saveProjectFiles();
+    scheduleDiagnostics();
   });
+  runLightDiagnostics();
 
   // Shortcut: Ctrl+Enter = compile
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, compile);
