@@ -41,6 +41,13 @@ select.tb-sel:focus{outline:none;border-color:var(--blue)}
 
 /* ── Editor ── */
 #editor-wrap{display:flex;flex-direction:column;height:100%;overflow:hidden}
+#filebar{display:flex;align-items:center;gap:6px;min-height:36px;padding:6px 8px;background:var(--bg1);border-bottom:1px solid var(--border);overflow-x:auto}
+.file-tab{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--muted);font-family:var(--mono);font-size:12px;cursor:pointer;white-space:nowrap}
+.file-tab.active{background:rgba(33,150,243,.14);border-color:var(--blue);color:var(--text)}
+.file-tab button{border:none;background:transparent;color:var(--muted);font-size:13px;line-height:1;cursor:pointer;padding:0}
+.file-tab button:hover{color:var(--red)}
+.file-action{height:24px;padding:0 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg3);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.file-action:hover{border-color:var(--blue)}
 #editor{flex:1;min-height:0}
 
 /* ── Right Panel ── */
@@ -151,6 +158,12 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
 <!-- Main -->
 <div id="main">
   <div id="editor-wrap">
+    <div id="filebar">
+      <div id="file-tabs"></div>
+      <button class="file-action" onclick="newProjectFile()">+ File</button>
+      <button class="file-action" onclick="document.getElementById('project-file-input').click()">Attach</button>
+      <input type="file" id="project-file-input" multiple style="display:none" onchange="attachProjectFiles(this)">
+    </div>
     <div id="editor"></div>
   </div>
 
@@ -272,6 +285,148 @@ const API     = '/api/compile';
 // Monaco Editor
 // ────────────────────────────────────────────────────────────────────────────
 let editor;
+let projectFiles = [];
+let activeFile = 'sketch.ino';
+
+function loadProjectFiles(){
+  try {
+    const saved = JSON.parse(localStorage.getItem('projectFiles') || '[]');
+    if (Array.isArray(saved) && saved.length){
+      const cleaned = saved.map(f=>({
+        name: sanitizeFileName(f.name),
+        content: String(f.content || '')
+      })).filter(f=>f.name);
+      if (cleaned.length) return cleaned;
+    }
+  } catch(_){}
+  return [{
+    name:'sketch.ino',
+    content: localStorage.getItem('sketch') || DEFAULT_SKETCH
+  }];
+}
+
+function saveProjectFiles(){
+  localStorage.setItem('projectFiles', JSON.stringify(projectFiles));
+  const main = projectFiles.find(f=>f.name === 'sketch.ino') || projectFiles[0];
+  localStorage.setItem('sketch', main?.content || '');
+}
+
+function sanitizeFileName(name){
+  return String(name || '')
+    .replace(/\\/g,'/')
+    .split('/')
+    .pop()
+    .replace(/[^a-zA-Z0-9._-]/g,'_')
+    .replace(/^\.+/,'')
+    .slice(0,64);
+}
+
+function fileLanguage(name){
+  const ext = name.split('.').pop().toLowerCase();
+  if (['ino','cpp','c','h','hpp'].includes(ext)) return 'cpp';
+  if (ext === 'json') return 'json';
+  return 'plaintext';
+}
+
+function currentFile(){
+  return projectFiles.find(f=>f.name === activeFile) || projectFiles[0];
+}
+
+function syncActiveFile(){
+  const file = currentFile();
+  if (editor && file) file.content = editor.getValue();
+}
+
+function switchFile(name){
+  if (!editor || name === activeFile) return;
+  syncActiveFile();
+  activeFile = name;
+  const file = currentFile();
+  editor.setValue(file.content);
+  monaco.editor.setModelLanguage(editor.getModel(), fileLanguage(file.name));
+  renderFileTabs();
+  saveProjectFiles();
+}
+
+function renderFileTabs(){
+  const tabs = document.getElementById('file-tabs');
+  if (!tabs) return;
+  tabs.innerHTML = '';
+  projectFiles.forEach(file=>{
+    const tab = document.createElement('button');
+    tab.className = 'file-tab' + (file.name === activeFile ? ' active' : '');
+    tab.type = 'button';
+    tab.onclick = ()=> switchFile(file.name);
+    tab.append(document.createTextNode(file.name));
+    if (file.name !== 'sketch.ino'){
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.textContent = 'x';
+      close.onclick = e=>{
+        e.stopPropagation();
+        removeProjectFile(file.name);
+      };
+      tab.appendChild(close);
+    }
+    tabs.appendChild(tab);
+  });
+}
+
+function uniqueFileName(name){
+  const safe = sanitizeFileName(name) || 'file.h';
+  if (!projectFiles.some(f=>f.name === safe)) return safe;
+  const dot = safe.lastIndexOf('.');
+  const base = dot > 0 ? safe.slice(0,dot) : safe;
+  const ext = dot > 0 ? safe.slice(dot) : '';
+  let i = 2;
+  while (projectFiles.some(f=>f.name === `${base}_${i}${ext}`)) i++;
+  return `${base}_${i}${ext}`;
+}
+
+function newProjectFile(){
+  syncActiveFile();
+  const raw = prompt('File name, for example MySensor.h or MySensor.cpp');
+  if (!raw) return;
+  const name = uniqueFileName(raw);
+  projectFiles.push({ name, content:'' });
+  activeFile = name;
+  editor.setValue('');
+  monaco.editor.setModelLanguage(editor.getModel(), fileLanguage(name));
+  renderFileTabs();
+  saveProjectFiles();
+}
+
+function removeProjectFile(name){
+  if (name === 'sketch.ino') return;
+  syncActiveFile();
+  projectFiles = projectFiles.filter(f=>f.name !== name);
+  if (activeFile === name) activeFile = projectFiles[0].name;
+  const file = currentFile();
+  editor.setValue(file.content);
+  monaco.editor.setModelLanguage(editor.getModel(), fileLanguage(file.name));
+  renderFileTabs();
+  saveProjectFiles();
+}
+
+async function attachProjectFiles(input){
+  syncActiveFile();
+  const files = [...input.files];
+  for (const file of files){
+    const name = uniqueFileName(file.name);
+    const content = await file.text();
+    projectFiles.push({ name, content });
+  }
+  if (files.length){
+    activeFile = projectFiles[projectFiles.length - 1].name;
+    const file = currentFile();
+    editor.setValue(file.content);
+    monaco.editor.setModelLanguage(editor.getModel(), fileLanguage(file.name));
+    renderFileTabs();
+    saveProjectFiles();
+  }
+  input.value = '';
+}
+
 require.config({ paths:{ vs:'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' }});
 require(['vs/editor/editor.main'], ()=>{
   // Arduino autocomplete
@@ -305,7 +460,7 @@ require(['vs/editor/editor.main'], ()=>{
   });
 
   editor = monaco.editor.create(document.getElementById('editor'),{
-    value: DEFAULT_SKETCH,
+    value: currentFile().content,
     language:'cpp',
     theme:'vs-dark',
     fontSize:14,
@@ -333,10 +488,11 @@ require(['vs/editor/editor.main'], ()=>{
   });
   monaco.editor.setTheme('ard');
 
-  // Restore saved code
-  const saved = localStorage.getItem('sketch');
-  if (saved) editor.setValue(saved);
-  editor.onDidChangeModelContent(()=> localStorage.setItem('sketch', editor.getValue()));
+  renderFileTabs();
+  editor.onDidChangeModelContent(()=>{
+    syncActiveFile();
+    saveProjectFiles();
+  });
 
   // Shortcut: Ctrl+Enter = compile
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, compile);
@@ -355,6 +511,9 @@ void loop() {
   digitalWrite(LED_BUILTIN, LOW);
   delay(1000);
 }`;
+
+projectFiles = loadProjectFiles();
+activeFile = projectFiles[0].name;
 
 // ────────────────────────────────────────────────────────────────────────────
 // Board selector
@@ -388,8 +547,13 @@ function setStatus(msg, type){
 }
 
 async function compile(){
+  syncActiveFile();
   const { board, fqbn } = boardInfo();
-  const code = editor.getValue();
+  const mainFile = projectFiles.find(f=>f.name === 'sketch.ino') || projectFiles[0];
+  const code = mainFile.content;
+  const files = projectFiles
+    .filter(f=>f.name !== mainFile.name)
+    .map(f=>({ name:f.name, content:f.content }));
   const btn  = document.getElementById('compile-btn');
 
   btn.disabled = true;
@@ -400,7 +564,7 @@ async function compile(){
     const res  = await fetch(API, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ code, board, fqbn, timestamp: new Date().toISOString() })
+      body: JSON.stringify({ code, files, board, fqbn, timestamp: new Date().toISOString() })
     });
     const data = await res.json();
 
