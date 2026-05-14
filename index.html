@@ -1,1994 +1,730 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arduino Cloud Editor</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-    <link rel="manifest" href="/site.webmanifest">
-    <style>
-        :root {
-            --bg-primary: #0a0e17;
-            --bg-secondary: #111827;
-            --bg-tertiary: #1a2332;
-            --accent-primary: #00ff88;
-            --accent-secondary: #0099ff;
-            --text-primary: #e5e7eb;
-            --text-secondary: #9ca3af;
-            --border-color: #1f2937;
-            --error: #ff4466;
-            --warning: #ffaa00;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arduino Cloud IDE</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg0:#07090f;--bg1:#0d1117;--bg2:#161b27;--bg3:#1e2535;
+  --border:#252d3d;--green:#00e676;--blue:#2196f3;--red:#f44336;--amber:#ff9800;
+  --text:#e2e8f0;--muted:#64748b;--mono:'JetBrains Mono',monospace;
+}
+html,body{height:100%;overflow:hidden}
+body{display:grid;grid-template-rows:48px 1fr;background:var(--bg0);color:var(--text);font-family:'Inter',sans-serif;font-size:14px}
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+/* ── Toolbar ── */
+#toolbar{display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--bg1);border-bottom:1px solid var(--border);flex-shrink:0}
+#toolbar h1{font-size:15px;font-weight:700;letter-spacing:.5px;color:var(--green);margin-right:8px;white-space:nowrap}
+.tb-sep{width:1px;height:24px;background:var(--border);margin:0 4px}
+select.tb-sel{background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:4px 8px;font-size:13px;cursor:pointer}
+select.tb-sel:focus{outline:none;border-color:var(--blue)}
+.tb-btn{padding:5px 14px;border-radius:6px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
+.tb-btn:disabled{opacity:.4;cursor:not-allowed}
+.tb-btn.green{background:var(--green);color:#000}
+.tb-btn.green:hover:not(:disabled){box-shadow:0 0 14px rgba(0,230,118,.4)}
+.tb-btn.blue{background:var(--blue);color:#fff}
+.tb-btn.blue:hover:not(:disabled){box-shadow:0 0 14px rgba(33,150,243,.35)}
+.tb-btn.ghost{background:var(--bg3);color:var(--text);border:1px solid var(--border)}
+.tb-btn.ghost:hover:not(:disabled){border-color:var(--muted)}
+#tb-status{font-size:12px;font-family:var(--mono);padding:4px 10px;border-radius:4px;margin-left:4px}
+#tb-status.ok{background:rgba(0,230,118,.12);color:var(--green);border:1px solid rgba(0,230,118,.2)}
+#tb-status.err{background:rgba(244,67,54,.12);color:var(--red);border:1px solid rgba(244,67,54,.2)}
+#tb-status.run{background:rgba(33,150,243,.12);color:var(--blue);border:1px solid rgba(33,150,243,.2)}
+#tb-status.hidden{display:none}
 
-        body {
-            font-family: 'JetBrains Mono', monospace;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            overflow-x: hidden;
-        }
+/* ── Main Layout ── */
+#main{display:grid;grid-template-columns:1fr 340px;height:100%;overflow:hidden}
 
-        .grain {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            opacity: 0.03;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-            z-index: 9999;
-        }
+/* ── Editor ── */
+#editor-wrap{display:flex;flex-direction:column;height:100%;overflow:hidden}
+#editor{flex:1;min-height:0}
 
-        .glow-orb {
-            position: fixed;
-            width: 600px;
-            height: 600px;
-            border-radius: 50%;
-            filter: blur(100px);
-            opacity: 0.15;
-            pointer-events: none;
-            animation: float 20s ease-in-out infinite;
-        }
+/* ── Right Panel ── */
+#panel{display:flex;flex-direction:column;border-left:1px solid var(--border);background:var(--bg1);overflow:hidden}
+.pane{border-bottom:1px solid var(--border);padding:14px}
+.pane:last-child{border-bottom:none}
+.pane-title{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
 
-        .glow-orb.primary {
-            background: var(--accent-primary);
-            top: -200px;
-            right: -200px;
-        }
+/* Flash section */
+#flash-avr-btn{
+  display:block;width:100%;padding:10px;border-radius:8px;border:none;
+  background:linear-gradient(135deg,var(--green),var(--blue));
+  color:#000;font-weight:700;font-size:14px;cursor:pointer;transition:.15s;
+}
+#flash-avr-btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,230,118,.3)}
+#flash-avr-btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+#flash-avr-btn .upload-progress{font-weight:400;font-size:12px;margin-left:6px;opacity:.8}
 
-        .glow-orb.secondary {
-            background: var(--accent-secondary);
-            bottom: -200px;
-            left: -200px;
-            animation-delay: -10s;
-        }
+esp-web-install-button{display:block;width:100%}
+esp-web-install-button [slot=activate]{
+  display:block;width:100%;padding:10px;border-radius:8px;border:none;
+  background:linear-gradient(135deg,var(--blue),#7c3aed);
+  color:#fff;font-weight:700;font-size:14px;cursor:pointer;transition:.15s;
+}
+esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(33,150,243,.3)}
 
-        @keyframes float {
-            0%, 100% { transform: translate(0, 0) scale(1); }
-            33% { transform: translate(50px, -50px) scale(1.1); }
-            66% { transform: translate(-50px, 50px) scale(0.9); }
-        }
+/* Serial Monitor */
+#serial-wrap{flex:1;display:flex;flex-direction:column;min-height:0;padding:14px}
+#serial-out{flex:1;min-height:0;overflow-y:auto;background:var(--bg0);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--mono);font-size:12px;line-height:1.6}
+.serial-rx{color:var(--text)}
+.serial-tx{color:var(--blue)}
+.serial-sys{color:var(--muted);font-style:italic}
+#serial-input-row{display:flex;gap:6px;margin-top:8px}
+#serial-input{flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--mono);font-size:12px}
+#serial-input:focus{outline:none;border-color:var(--blue)}
+#serial-send{padding:6px 14px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer}
+#serial-baud{width:100%;margin-bottom:8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-size:12px}
+#serial-controls{display:flex;gap:6px;margin-bottom:8px}
+.sc-btn{flex:1;padding:5px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-weight:600;cursor:pointer}
+.sc-btn:hover{border-color:var(--muted)}
+.sc-btn.active{background:rgba(0,230,118,.15);border-color:var(--green);color:var(--green)}
 
-        h1 {
-            font-family: 'Syne', sans-serif;
-            font-weight: 800;
-            font-size: 2.5rem;
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            letter-spacing: -0.05em;
-        }
+/* Library Manager */
+#lib-panel{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:none;align-items:center;justify-content:center}
+#lib-panel.open{display:flex}
+#lib-box{background:var(--bg1);border:1px solid var(--border);border-radius:14px;width:min(700px,95vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden}
+#lib-header{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+#lib-header h2{font-size:16px;font-weight:700}
+#lib-close{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1}
+#lib-close:hover{color:var(--text)}
+#lib-tabs{display:flex;gap:4px;padding:12px 22px;border-bottom:1px solid var(--border)}
+.lib-tab{padding:6px 16px;border-radius:6px;border:none;background:none;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer}
+.lib-tab.active{background:rgba(33,150,243,.15);color:var(--blue)}
+#lib-body{flex:1;overflow-y:auto;padding:18px 22px}
+#lib-search{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;color:var(--text);font-size:14px;margin-bottom:14px}
+#lib-search:focus{outline:none;border-color:var(--blue)}
+.lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.lib-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;transition:.15s;user-select:none}
+.lib-card:hover{border-color:var(--blue);background:rgba(33,150,243,.05)}
+.lib-card.installed{border-color:var(--green);background:rgba(0,230,118,.05)}
+.lib-card .lib-name{font-size:13px;font-weight:600;margin-bottom:2px}
+.lib-card .lib-sub{font-size:11px;color:var(--muted)}
+.lib-card .lib-toggle{float:right;font-size:16px}
+.installed-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.installed-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.25);border-radius:20px;font-size:12px;font-weight:600;color:var(--green)}
+.installed-badge button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:0}
+.installed-badge button:hover{color:var(--red)}
+.drop-zone{border:2px dashed var(--border);border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:.2s}
+.drop-zone:hover,.drop-zone.over{border-color:var(--blue);background:rgba(33,150,243,.05)}
+.drop-zone p{color:var(--muted);margin-top:8px;font-size:13px}
+.custom-include-row{display:flex;gap:8px;margin-top:14px}
+.custom-include-row input{flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-family:var(--mono);font-size:13px}
+.custom-include-row input:focus{outline:none;border-color:var(--blue)}
+.custom-include-row button{padding:8px 16px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer}
 
-        .card {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 1.5rem;
-            transition: all 0.3s ease;
-        }
-
-        .card:hover {
-            border-color: var(--accent-primary);
-            box-shadow: 0 0 30px rgba(0, 255, 136, 0.1);
-        }
-
-        .input-field {
-            width: 100%;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 0.75rem 1rem;
-            color: var(--text-primary);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.875rem;
-            transition: all 0.3s ease;
-        }
-
-        .input-field:focus {
-            outline: none;
-            border-color: var(--accent-primary);
-            box-shadow: 0 0 0 3px rgba(0, 255, 136, 0.1);
-        }
-
-        .input-field::placeholder {
-            color: var(--text-secondary);
-        }
-
-        .btn {
-            padding: 0.875rem 1.75rem;
-            border: none;
-            border-radius: 8px;
-            font-family: 'Syne', sans-serif;
-            font-weight: 700;
-            font-size: 0.95rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .btn::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 0;
-            height: 0;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.2);
-            transform: translate(-50%, -50%);
-            transition: width 0.6s, height 0.6s;
-        }
-
-        .btn:hover::before {
-            width: 300px;
-            height: 300px;
-        }
-
-        .btn span {
-            position: relative;
-            z-index: 1;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-            color: var(--bg-primary);
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(0, 255, 136, 0.3);
-        }
-
-        .btn-secondary {
-            background: var(--bg-tertiary);
-            color: var(--text-primary);
-            border: 1px solid var(--border-color);
-        }
-
-        .btn-secondary:hover {
-            border-color: var(--accent-secondary);
-            box-shadow: 0 0 20px rgba(0, 153, 255, 0.2);
-        }
-
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none !important;
-        }
-
-        .status-indicator {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            font-size: 0.875rem;
-            font-weight: 600;
-            animation: slideIn 0.5s ease;
-        }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            animation: pulse 2s ease-in-out infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        .status-success {
-            background: rgba(0, 255, 136, 0.1);
-            color: var(--accent-primary);
-            border: 1px solid rgba(0, 255, 136, 0.2);
-        }
-
-        .status-success .status-dot {
-            background: var(--accent-primary);
-        }
-
-        .status-error {
-            background: rgba(255, 68, 102, 0.1);
-            color: var(--error);
-            border: 1px solid rgba(255, 68, 102, 0.2);
-        }
-
-        .status-error .status-dot {
-            background: var(--error);
-        }
-
-        .status-info {
-            background: rgba(0, 153, 255, 0.1);
-            color: var(--accent-secondary);
-            border: 1px solid rgba(0, 153, 255, 0.2);
-        }
-
-        .status-info .status-dot {
-            background: var(--accent-secondary);
-        }
-
-        .status-warning {
-            background: rgba(255, 170, 0, 0.1);
-            color: var(--warning);
-            border: 1px solid rgba(255, 170, 0, 0.2);
-        }
-
-        .status-warning .status-dot {
-            background: var(--warning);
-        }
-
-        #editor-container {
-            height: 600px;
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            overflow: hidden;
-            transition: all 0.3s ease;
-        }
-
-        #editor-container:hover {
-            border-color: var(--accent-secondary);
-            box-shadow: 0 0 30px rgba(0, 153, 255, 0.1);
-        }
-
-        .label {
-            display: block;
-            font-size: 0.875rem;
-            font-weight: 700;
-            color: var(--text-secondary);
-            margin-bottom: 0.5rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-        }
-
-        .grid-pattern {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-image: 
-                linear-gradient(rgba(0, 255, 136, 0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 255, 136, 0.03) 1px, transparent 1px);
-            background-size: 50px 50px;
-            pointer-events: none;
-            z-index: -1;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .spinner {
-            border: 2px solid var(--bg-tertiary);
-            border-top: 2px solid var(--accent-primary);
-            border-radius: 50%;
-            width: 16px;
-            height: 16px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-            margin-right: 0.5rem;
-        }
-
-        .connection-status {
-            position: fixed;
-            top: 1rem;
-            right: 1rem;
-            z-index: 1000;
-        }
-
-        @media (max-width: 768px) {
-            h1 {
-                font-size: 1.75rem;
-            }
-
-            #editor-container {
-                height: 400px;
-            }
-
-            .btn {
-                padding: 0.75rem 1.25rem;
-                font-size: 0.85rem;
-            }
-        }
-
-        /* Library Manager */
-        .lib-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            padding: 0.3rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 700;
-            background: rgba(0,255,136,0.08);
-            border: 1px solid rgba(0,255,136,0.2);
-            color: var(--accent-primary);
-            cursor: default;
-            transition: all 0.2s;
-        }
-
-        .lib-badge .remove-lib {
-            cursor: pointer;
-            opacity: 0.6;
-            font-size: 0.9rem;
-            line-height: 1;
-            transition: opacity 0.2s;
-        }
-
-        .lib-badge .remove-lib:hover { opacity: 1; }
-
-        .lib-card {
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 1rem;
-            transition: all 0.25s;
-            cursor: pointer;
-            position: relative;
-        }
-
-        .lib-card:hover {
-            border-color: var(--accent-primary);
-            box-shadow: 0 0 18px rgba(0,255,136,0.12);
-            transform: translateY(-1px);
-        }
-
-        .lib-card.installed {
-            border-color: rgba(0,255,136,0.4);
-            background: rgba(0,255,136,0.04);
-        }
-
-        .lib-card .lib-tag {
-            display: inline-block;
-            padding: 0.15rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.7rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            background: rgba(0,153,255,0.15);
-            color: var(--accent-secondary);
-            margin-bottom: 0.5rem;
-        }
-
-        .lib-search {
-            width: 100%;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 0.65rem 1rem;
-            color: var(--text-primary);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.875rem;
-            transition: all 0.3s;
-        }
-
-        .lib-search:focus {
-            outline: none;
-            border-color: var(--accent-primary);
-            box-shadow: 0 0 0 3px rgba(0,255,136,0.1);
-        }
-
-        .tab-btn {
-            padding: 0.5rem 1.25rem;
-            border-radius: 6px;
-            font-family: 'Syne', sans-serif;
-            font-weight: 700;
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            cursor: pointer;
-            border: none;
-            transition: all 0.2s;
-            background: transparent;
-            color: var(--text-secondary);
-        }
-
-        .tab-btn.active {
-            background: rgba(0,255,136,0.12);
-            color: var(--accent-primary);
-        }
-
-        .tab-btn:hover:not(.active) {
-            color: var(--text-primary);
-        }
-
-        .drop-zone {
-            border: 2px dashed var(--border-color);
-            border-radius: 10px;
-            padding: 2rem;
-            text-align: center;
-            transition: all 0.3s;
-            cursor: pointer;
-        }
-
-        .drop-zone.drag-over, .drop-zone:hover {
-            border-color: var(--accent-primary);
-            background: rgba(0,255,136,0.04);
-        }
-    </style>
+/* Scrollbars */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+</style>
 </head>
 <body>
-    <div class="grain"></div>
-    <div class="grid-pattern"></div>
-    <div class="glow-orb primary"></div>
-    <div class="glow-orb secondary"></div>
 
-    <div class="connection-status" id="connectionStatus"></div>
+<!-- Toolbar -->
+<div id="toolbar">
+  <h1>⚡ Arduino IDE</h1>
+  <div class="tb-sep"></div>
 
-    <div class="container mx-auto px-4 py-8 max-w-7xl relative z-10">
-        <!-- Header -->
-        <header class="mb-12 text-center">
-            <h1 class="mb-4">Arduino Cloud Editor</h1>
-            <p class="text-text-secondary text-lg">Code, Compile, and Flash — All in Your Browser</p>
-        </header>
+  <select class="tb-sel" id="board-sel" onchange="onBoardChange()">
+    <optgroup label="Arduino">
+      <option value="uno|arduino:avr:uno">Arduino Uno</option>
+      <option value="nano|arduino:avr:nano:cpu=atmega328old">Arduino Nano</option>
+      <option value="mega|arduino:avr:mega:cpu=atmega2560">Arduino Mega</option>
+    </optgroup>
+    <optgroup label="ESP32">
+      <option value="esp32|esp32:esp32:esp32doit-devkit-v1">ESP32 DevKit</option>
+      <option value="esp32-s3|esp32:esp32:esp32s3">ESP32-S3</option>
+      <option value="esp32-c3|esp32:esp32:esp32c3">ESP32-C3</option>
+    </optgroup>
+  </select>
 
+  <div class="tb-sep"></div>
+  <button class="tb-btn green" onclick="compile()" id="compile-btn">▶ Compile</button>
+  <button class="tb-btn ghost" onclick="openLibs()">📦 Libraries</button>
+  <div id="tb-status" class="hidden"></div>
+</div>
 
+<!-- Main -->
+<div id="main">
+  <div id="editor-wrap">
+    <div id="editor"></div>
+  </div>
 
-        <!-- Editor Section -->
-        <div class="card mb-8">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold text-accent-secondary" style="font-family: 'Syne', sans-serif;">Code Editor</h2>
-                <div class="flex gap-3">
-                    <button class="btn btn-secondary" onclick="toggleLibraryManager()">
-                        <span>📦 Libraries</span>
-                    </button>
-                    <button class="btn btn-secondary" onclick="clearEditor()">
-                        <span>Clear</span>
-                    </button>
-                    <button class="btn btn-secondary" onclick="loadExample()">
-                        <span>Load Example</span>
-                    </button>
-                </div>
-            </div>
-            <div id="editor-container"></div>
+  <!-- Right Panel -->
+  <div id="panel">
+
+    <!-- Flash -->
+    <div class="pane">
+      <div class="pane-title">Flash Device</div>
+
+      <!-- AVR (arduino-web-uploader) -->
+      <div id="avr-section">
+        <button
+          id="flash-avr-btn"
+          arduino-uploader
+          hex-href=""
+          board="uno"
+        >⚡ Flash Arduino<span class="upload-progress"></span></button>
+        <div style="margin-top:6px;font-size:11px;color:var(--muted);text-align:center">
+          Powered by <a href="https://github.com/dbuezas/arduino-web-uploader" target="_blank" style="color:var(--blue)">arduino-web-uploader</a>
         </div>
+      </div>
 
-        <!-- Library Manager Panel -->
-        <div id="libraryPanel" class="card mb-8" style="display:none;">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold text-accent-primary" style="font-family: 'Syne', sans-serif;">📦 Library Manager</h2>
-                <button class="btn btn-secondary" onclick="toggleLibraryManager()"><span>✕ Close</span></button>
-            </div>
-
-            <!-- Installed Libraries -->
-            <div class="mb-6">
-                <label class="label mb-3">Installed Libraries</label>
-                <div id="installedLibraries" class="flex flex-wrap gap-2 min-h-10">
-                    <span class="text-text-secondary text-sm" id="noLibsMsg">No libraries added yet</span>
-                </div>
-            </div>
-
-            <!-- Tabs -->
-            <div class="flex gap-2 mb-5" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
-                <button class="tab-btn active" onclick="switchLibTab('popular', this)">Popular</button>
-                <button class="tab-btn" onclick="switchLibTab('search', this)">Search</button>
-                <button class="tab-btn" onclick="switchLibTab('import', this)">Import ZIP / URL</button>
-            </div>
-
-            <!-- Popular Tab -->
-            <div id="tab-popular">
-                <div id="popularLibGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
-            </div>
-
-            <!-- Search Tab -->
-            <div id="tab-search" style="display:none;">
-                <input type="text" id="libSearchInput" class="lib-search mb-4" placeholder="Search libraries... (e.g. Servo, NeoPixel, DHT)">
-                <div id="searchLibGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
-            </div>
-
-            <!-- Import Tab -->
-            <div id="tab-import" style="display:none;">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- ZIP Upload -->
-                    <div>
-                        <label class="label mb-3">Upload ZIP Archive</label>
-                        <div class="drop-zone" id="dropZone" onclick="document.getElementById('zipInput').click()">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">📁</div>
-                            <p class="text-text-primary font-bold mb-1">Click or drag & drop</p>
-                            <p class="text-text-secondary text-sm">Arduino library .zip files</p>
-                            <input type="file" id="zipInput" accept=".zip" style="display:none;" onchange="importLibraryZip(this)">
-                        </div>
-                    </div>
-                    <!-- URL Import -->
-                    <div>
-                        <label class="label mb-3">Add by Include Line</label>
-                        <p class="text-text-secondary text-sm mb-3">Paste an <code style="color:var(--accent-primary)">#include</code> line or just the library name to add it to your sketch header.</p>
-                        <input type="text" id="customLibUrl" class="input-field mb-3" placeholder='e.g.  #include &lt;MyLib.h&gt;  or  MyLib'>
-                        <button class="btn btn-primary w-full" onclick="addCustomInclude()"><span>➕ Add Include</span></button>
-                        <div id="importStatus" class="mt-3"></div>
-                    </div>
-                </div>
-            </div>
+      <!-- ESP32 (esp-web-tools by Nabu Casa) -->
+      <div id="esp-section" style="display:none">
+        <esp-web-install-button id="esp-btn" manifest="">
+          <button slot="activate">⚡ Flash ESP32</button>
+          <span slot="unsupported" style="color:var(--red);font-size:12px">Web Serial not supported — use Chrome/Edge</span>
+        </esp-web-install-button>
+        <div style="margin-top:6px;font-size:11px;color:var(--muted);text-align:center">
+          Powered by <a href="https://esphome.github.io/esp-web-tools/" target="_blank" style="color:var(--blue)">esp-web-tools</a>
         </div>
+      </div>
 
-        <!-- Actions Section -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <div class="card">
-                <h3 class="text-lg font-bold mb-4 text-accent-primary" style="font-family: 'Syne', sans-serif;">Build</h3>
-                <button class="btn btn-primary w-full" onclick="compileCode()" id="compileBtn">
-                    <span>🔨 Compile</span>
-                </button>
-                <div id="compileStatus" class="mt-4"></div>
-            </div>
-
-            <div class="card">
-                <h3 class="text-lg font-bold mb-4 text-accent-secondary" style="font-family: 'Syne', sans-serif;">Flash</h3>
-                
-                <!-- Board and Baud Rate Selection -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label class="label">Board Type</label>
-                        <select id="boardType" class="input-field">
-                            <option value="uno">Arduino Uno</option>
-                            <option value="nano">Arduino Nano</option>
-                            <option value="mega">Arduino Mega</option>
-                            <option value="leonardo">Arduino Leonardo</option>
-                            <option value="esp32">ESP32</option>
-                            <option value="esp32-s2">ESP32-S2</option>
-                            <option value="esp32-s3">ESP32-S3</option>
-                            <option value="esp32-c3">ESP32-C3</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="label">Baud Rate</label>
-                        <select id="baudRate" class="input-field">
-                            <option value="115200">115200</option>
-                            <option value="57600">57600</option>
-                            <option value="38400">38400</option>
-                            <option value="19200">19200</option>
-                            <option value="9600">9600</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Connect and Flash Buttons -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                    <button class="btn btn-secondary w-full" onclick="connectSerial()" id="connectBtn">
-                        <span>🔌 Connect to Board</span>
-                    </button>
-                    <button class="btn btn-primary w-full" onclick="flashArduino()" id="flashBtn" disabled>
-                        <span>⚡ Flash Device</span>
-                    </button>
-                </div>
-
-                <div id="flashStatus" class="mb-4"></div>
-
-                <!-- Connection Status -->
-                <div id="portStatus" class="text-sm text-text-secondary"></div>
-            </div>
-        </div>
-
-        <!-- Console Section -->
-        <div class="card mb-8">
-            <h2 class="text-xl font-bold mb-6 text-accent-primary" style="font-family: 'Syne', sans-serif;">Console Output</h2>
-            <div id="console" class="bg-bg-tertiary p-4 rounded-lg h-64 overflow-y-auto font-mono text-sm" style="font-family: 'JetBrains Mono', monospace;">
-                <div class="text-text-secondary">Ready to compile and flash...</div>
-            </div>
-        </div>
-
-        <!-- Serial Monitor Section -->
-        <div class="card">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold text-accent-secondary" style="font-family: 'Syne', sans-serif;">Serial Monitor</h2>
-                <div class="flex gap-3 items-center">
-                    <select id="serialBaudRate" class="input-field" style="width: auto; padding: 0.5rem 1rem;">
-                        <option value="9600">9600</option>
-                        <option value="19200">19200</option>
-                        <option value="38400">38400</option>
-                        <option value="57600">57600</option>
-                        <option value="115200">115200</option>
-                    </select>
-                    <button class="btn btn-secondary" onclick="startSerialMonitor()" id="serialStartBtn" disabled>
-                        <span>▶ Start</span>
-                    </button>
-                    <button class="btn btn-secondary" onclick="stopSerialMonitor()" id="serialStopBtn" disabled>
-                        <span>⏹ Stop</span>
-                    </button>
-                    <button class="btn btn-secondary" onclick="clearSerialMonitor()">
-                        <span>Clear</span>
-                    </button>
-                </div>
-            </div>
-            <div id="serialMonitor" class="bg-bg-tertiary p-4 rounded-lg h-64 overflow-y-auto font-mono text-sm" style="font-family: 'JetBrains Mono', monospace;">
-                <div class="text-text-secondary">Connect to board and start serial monitor...</div>
-            </div>
-            <div class="mt-4 flex gap-3">
-                <input 
-                    type="text" 
-                    id="serialInput" 
-                    class="input-field flex-1" 
-                    placeholder="Type message to send..."
-                    disabled
-                >
-                <button class="btn btn-primary" onclick="sendSerialData()" id="serialSendBtn" disabled>
-                    <span>Send</span>
-                </button>
-            </div>
-        </div>
+      <div id="flash-note" style="margin-top:10px;font-size:11px;color:var(--muted)">Compile first, then flash. The button fetches the latest firmware automatically.</div>
     </div>
 
-    <!-- Monaco Editor -->
-    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs/loader.js"></script>
-    
-    <!-- AVRGirl Arduino (browser build) -->
-    <script src="https://unpkg.com/avrgirl-arduino@latest/dist/avrgirl-arduino.global.js"></script>
+    <!-- Serial Monitor -->
+    <div id="serial-wrap">
+      <div class="pane-title">Serial Monitor</div>
+      <select id="serial-baud" class="serial-baud">
+        <option>9600</option><option>19200</option><option>38400</option>
+        <option>57600</option><option selected>115200</option>
+      </select>
+      <div id="serial-controls">
+        <button class="sc-btn" id="sc-connect" onclick="serialConnect()">Connect</button>
+        <button class="sc-btn" id="sc-disconnect" onclick="serialDisconnect()" disabled>Disconnect</button>
+        <button class="sc-btn" onclick="serialClear()">Clear</button>
+      </div>
+      <div id="serial-out"></div>
+      <div id="serial-input-row">
+        <input id="serial-input" placeholder="Send…" disabled>
+        <button id="serial-send" onclick="serialSend()" disabled>↩</button>
+      </div>
+    </div>
+  </div>
+</div>
 
-    <!-- ESPTool for ESP32 — loaded as ES Module via dynamic import() in flashESP32() -->
+<!-- Library Manager Modal -->
+<div id="lib-panel">
+  <div id="lib-box">
+    <div id="lib-header">
+      <h2>📦 Library Manager</h2>
+      <button id="lib-close" onclick="closeLibs()">✕</button>
+    </div>
+    <div id="lib-tabs">
+      <button class="lib-tab active" onclick="switchLibTab('popular',this)">Popular</button>
+      <button class="lib-tab" onclick="switchLibTab('search',this)">Search</button>
+      <button class="lib-tab" onclick="switchLibTab('custom',this)">Custom / ZIP</button>
+    </div>
+    <div id="lib-body">
+      <!-- Installed -->
+      <div id="installed-section">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Installed</div>
+        <div id="installed-list" class="installed-list"><span style="color:var(--muted);font-size:12px">None yet</span></div>
+      </div>
+      <div style="border-top:1px solid var(--border);margin:14px 0"></div>
 
-    <script>
-        let editor;
-        let avrgirl;
-        let serialPort = null;
-        let serialReader = null;
-        let serialWriter = null;
-        let isSerialReading = false;
-        let esploader = null;
+      <!-- Popular tab -->
+      <div id="tab-popular">
+        <div class="lib-grid" id="popular-grid"></div>
+      </div>
 
-        // Initialize Monaco Editor
-        require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs' }});
-        
-        require(['vs/editor/editor.main'], function() {
-            // Register Arduino-specific autocomplete
-            monaco.languages.registerCompletionItemProvider('cpp', {
-                provideCompletionItems: function(model, position) {
-                    const suggestions = [
-                        // Arduino Functions
-                        {
-                            label: 'pinMode',
-                            kind: monaco.languages.CompletionItemKind.Function,
-                            insertText: 'pinMode(${1:pin}, ${2:mode});',
-                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                            documentation: 'Configures the specified pin to behave either as an input or an output.\nParameters: pin (int), mode (INPUT, OUTPUT, INPUT_PULLUP)'
-                        },
-                        {
-                            label: 'digitalWrite',
-                            kind: monaco.languages.CompletionItemKind.Function,
-                            insertText: 'digitalWrite(${1:pin}, ${2:value});',
-                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                            documentation: 'Write a HIGH or a LOW value to a digital pin.\nParameters: pin (int), value (HIGH or LOW)'
-                        },
-                        {
-                            label: 'digitalRead',
-                            kind: monaco.languages.CompletionItemKind.Function,
-                            insertText: 'digitalRead(${1:pin})',
-                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                            documentation: 'Reads the value from a specified digital pin, either HIGH or LOW.\nParameters: pin (int)\nReturns: HIGH or LOW'
-                        },
-                        {
-                            label: 'analogWrite',
-                            kind: monaco.languages.CompletionItemKind.Function,
-                            insertText: 'analogWrite(${1:pin}, ${2:value});',
-                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                            documentation: 'Writes an analog value (PWM wave) to a pin.\nParameters: pin (int), value (0-255)'
-                        },
-                        {
-                            label: 'analogRead',
-                            kind: monaco.languages.CompletionItemKind.Function,
-                            insertText: 'analogRead(${1:pin})',
-                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                            documentation: 'Reads the value from the specified analog pin.\nParameters: pin (int A0-A5)\nReturns: 0-1023'
-                        },
-                        {
-                            label: 'delay',
-                            kind: monaco.languages.CompletionItemKind.Function,
-                            insertText: 'delay(${1:ms});',
-                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                            documentation: 'Pauses the program for the amount of time (in milliseconds) specified.\nParameters: ms (unsigned long)'
-                        },
-                        {
-                            label: 'delayMicroseconds',
-                            kind: monaco.languages.CompletionItemKind.Function,
-                            insertText: 'delayMicroseconds(${1:us});',
-                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                            documentation: 'Pauses the program for the amount of time (in microseconds) specified.\nParameters: us (unsigned int)'
-                        },
-                        {
-                            label: 'millis',
-                            kind: monaco.languages.CompletionItemKind.Function,
-                            insertText: 'millis()',
-                            documentation: 'Returns the number of milliseconds since the Arduino board began running.\nReturns: unsigned long'
-                        },
-                        {
-                            label: 'micros',
-                            kind: monaco.languages.CompletionItemKind.Function,
-                            insertText: 'micros()',
-                            documentation: 'Returns the number of microseconds since the Arduino board began running.\nReturns: unsigned long'
-                        },
-                        // Serial Functions
-                        {
-                            label: 'Serial.begin',
-                            kind: monaco.languages.CompletionItemKind.Function,
-                            insertText: 'Serial.begin(${1:9600});',
-                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                            documentation: 'Sets the data rate in bits per second (baud) for serial data transmission.\nCommon values: 9600, 115200'
-                        },
-                        {
-                            label: 'Serial.print',
-                            kind: monaco.languages.CompletionItemKind.Function,
-                            insertText: 'Serial.print(${1:data});',
-                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                            documentation: 'Prints data to the serial port as human-readable ASCII text.'
-                        },
-                        {
-                            label: 'Serial.println',
-                            kind: monaco.languages.CompletionItemKind.Function,
-                            insertText: 'Serial.println(${1:data});',
-                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                            documentation: 'Prints data to the serial port followed by a carriage return and newline.'
-                        },
-                        {
-                            label: 'Serial.available',
-                            kind: monaco.languages.CompletionItemKind.Function,
-                            insertText: 'Serial.available()',
-                            documentation: 'Get the number of bytes available for reading from the serial port.\nReturns: int'
-                        },
-                        {
-                            label: 'Serial.read',
-                            kind: monaco.languages.CompletionItemKind.Function,
-                            insertText: 'Serial.read()',
-                            documentation: 'Reads incoming serial data.\nReturns: int (first byte of incoming data, or -1 if no data)'
-                        },
-                        {
-                            label: 'Serial.write',
-                            kind: monaco.languages.CompletionItemKind.Function,
-                            insertText: 'Serial.write(${1:data});',
-                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                            documentation: 'Writes binary data to the serial port.'
-                        },
-                        // Math Functions
-                        {
-                            label: 'map',
-                            kind: monaco.languages.CompletionItemKind.Function,
-                            insertText: 'map(${1:value}, ${2:fromLow}, ${3:fromHigh}, ${4:toLow}, ${5:toHigh})',
-                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                            documentation: 'Re-maps a number from one range to another.'
-                        },
-                        {
-                            label: 'constrain',
-                            kind: monaco.languages.CompletionItemKind.Function,
-                            insertText: 'constrain(${1:x}, ${2:a}, ${3:b})',
-                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                            documentation: 'Constrains a number to be within a range.'
-                        },
-                        {
-                            label: 'random',
-                            kind: monaco.languages.CompletionItemKind.Function,
-                            insertText: 'random(${1:min}, ${2:max})',
-                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                            documentation: 'Generates pseudo-random numbers.'
-                        },
-                        // Constants
-                        {
-                            label: 'HIGH',
-                            kind: monaco.languages.CompletionItemKind.Constant,
-                            insertText: 'HIGH',
-                            documentation: 'Digital pin state: HIGH (1, 5V)'
-                        },
-                        {
-                            label: 'LOW',
-                            kind: monaco.languages.CompletionItemKind.Constant,
-                            insertText: 'LOW',
-                            documentation: 'Digital pin state: LOW (0, 0V)'
-                        },
-                        {
-                            label: 'INPUT',
-                            kind: monaco.languages.CompletionItemKind.Constant,
-                            insertText: 'INPUT',
-                            documentation: 'Pin mode: INPUT'
-                        },
-                        {
-                            label: 'OUTPUT',
-                            kind: monaco.languages.CompletionItemKind.Constant,
-                            insertText: 'OUTPUT',
-                            documentation: 'Pin mode: OUTPUT'
-                        },
-                        {
-                            label: 'INPUT_PULLUP',
-                            kind: monaco.languages.CompletionItemKind.Constant,
-                            insertText: 'INPUT_PULLUP',
-                            documentation: 'Pin mode: INPUT with internal pullup resistor'
-                        },
-                        {
-                            label: 'LED_BUILTIN',
-                            kind: monaco.languages.CompletionItemKind.Constant,
-                            insertText: 'LED_BUILTIN',
-                            documentation: 'Built-in LED pin (usually pin 13)'
-                        },
-                        // Structure
-                        {
-                            label: 'setup',
-                            kind: monaco.languages.CompletionItemKind.Snippet,
-                            insertText: 'void setup() {\n\t${1:// Setup code}\n}',
-                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                            documentation: 'The setup() function is called when a sketch starts.'
-                        },
-                        {
-                            label: 'loop',
-                            kind: monaco.languages.CompletionItemKind.Snippet,
-                            insertText: 'void loop() {\n\t${1:// Main code}\n}',
-                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                            documentation: 'The loop() function loops consecutively, allowing your program to change and respond.'
-                        },
-                        // Analog pins
-                        { label: 'A0', kind: monaco.languages.CompletionItemKind.Constant, insertText: 'A0', documentation: 'Analog pin 0' },
-                        { label: 'A1', kind: monaco.languages.CompletionItemKind.Constant, insertText: 'A1', documentation: 'Analog pin 1' },
-                        { label: 'A2', kind: monaco.languages.CompletionItemKind.Constant, insertText: 'A2', documentation: 'Analog pin 2' },
-                        { label: 'A3', kind: monaco.languages.CompletionItemKind.Constant, insertText: 'A3', documentation: 'Analog pin 3' },
-                        { label: 'A4', kind: monaco.languages.CompletionItemKind.Constant, insertText: 'A4', documentation: 'Analog pin 4' },
-                        { label: 'A5', kind: monaco.languages.CompletionItemKind.Constant, insertText: 'A5', documentation: 'Analog pin 5' },
-                    ];
-                    
-                    return { suggestions: suggestions };
-                }
-            });
+      <!-- Search tab -->
+      <div id="tab-search" style="display:none">
+        <input id="lib-search" placeholder="Search libraries…" oninput="searchLibs(this.value)">
+        <div class="lib-grid" id="search-grid"></div>
+      </div>
 
-            editor = monaco.editor.create(document.getElementById('editor-container'), {
-                value: `// Arduino Sketch
+      <!-- Custom tab -->
+      <div id="tab-custom" style="display:none">
+        <div class="drop-zone" id="drop-zone" onclick="document.getElementById('zip-input').click()">
+          <div style="font-size:2rem">📁</div>
+          <p>Drop .zip library here, or click to browse</p>
+          <input type="file" id="zip-input" accept=".zip" style="display:none" onchange="importZip(this)">
+        </div>
+        <div class="custom-include-row">
+          <input id="custom-include" placeholder='e.g. #include <MyLib.h>  or just  MyLib'>
+          <button onclick="addCustomInclude()">Add</button>
+        </div>
+        <div id="import-status" style="margin-top:10px;font-size:12px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+<script src="https://github.com/dbuezas/arduino-web-uploader/releases/download/v1.1.2/main.js"></script>
+
+<script>
+// ────────────────────────────────────────────────────────────────────────────
+// Config
+// ────────────────────────────────────────────────────────────────────────────
+const BUILDS  = 'https://raw.githubusercontent.com/Narek-D8v/arduino-web-compiler/builds';
+const API     = '/api/compile';
+
+// ────────────────────────────────────────────────────────────────────────────
+// Monaco Editor
+// ────────────────────────────────────────────────────────────────────────────
+let editor;
+require.config({ paths:{ vs:'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' }});
+require(['vs/editor/editor.main'], ()=>{
+  // Arduino autocomplete
+  monaco.languages.registerCompletionItemProvider('cpp',{
+    provideCompletionItems(){
+      const kw = monaco.languages.CompletionItemKind;
+      const s  = (label,insert,doc,kind=kw.Function)=>({
+        label, insertText:insert, documentation:doc, kind,
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
+      });
+      return { suggestions:[
+        s('pinMode','pinMode(${1:pin}, ${2:OUTPUT});','Configure pin as INPUT or OUTPUT'),
+        s('digitalWrite','digitalWrite(${1:pin}, ${2:HIGH});','Write HIGH or LOW to digital pin'),
+        s('digitalRead','digitalRead(${1:pin})','Read digital pin value',kw.Function),
+        s('analogWrite','analogWrite(${1:pin}, ${2:value});','Write PWM value 0-255'),
+        s('analogRead','analogRead(${1:A0})','Read analog pin 0-1023',kw.Function),
+        s('delay','delay(${1:1000});','Pause ms'),
+        s('millis','millis()','ms since boot',kw.Function),
+        s('Serial.begin','Serial.begin(${1:9600});','Init serial'),
+        s('Serial.print','Serial.print(${1:value});','Print'),
+        s('Serial.println','Serial.println(${1:value});','Print with newline'),
+        s('Serial.available','Serial.available()','Bytes waiting',kw.Function),
+        s('Serial.read','Serial.read()','Read byte',kw.Function),
+        s('pinMode + loop','void setup() {\n\t$0\n}\n\nvoid loop() {\n\t\n}','Sketch skeleton',kw.Snippet),
+        s('map','map(${1:value}, ${2:fromLow}, ${3:fromHigh}, ${4:toLow}, ${5:toHigh})','Remap value'),
+        s('constrain','constrain(${1:x}, ${2:min}, ${3:max})','Clamp value'),
+        ...['HIGH','LOW','INPUT','OUTPUT','INPUT_PULLUP','LED_BUILTIN','A0','A1','A2','A3','A4','A5','true','false']
+          .map(c=>s(c,c,'Arduino constant',kw.Constant)),
+      ]};
+    }
+  });
+
+  editor = monaco.editor.create(document.getElementById('editor'),{
+    value: DEFAULT_SKETCH,
+    language:'cpp',
+    theme:'vs-dark',
+    fontSize:14,
+    fontFamily:"'JetBrains Mono', monospace",
+    automaticLayout:true,
+    minimap:{enabled:false},
+    scrollBeyondLastLine:false,
+    quickSuggestions:true,
+  });
+
+  // Custom dark theme
+  monaco.editor.defineTheme('ard',{
+    base:'vs-dark', inherit:true,
+    rules:[
+      {token:'keyword',foreground:'00e676',fontStyle:'bold'},
+      {token:'comment',foreground:'546e7a',fontStyle:'italic'},
+      {token:'string',foreground:'ffcc02'},
+      {token:'number',foreground:'80cbc4'},
+    ],
+    colors:{
+      'editor.background':'#07090f',
+      'editorCursor.foreground':'#00e676',
+      'editor.selectionBackground':'#00e67630',
+    }
+  });
+  monaco.editor.setTheme('ard');
+
+  // Restore saved code
+  const saved = localStorage.getItem('sketch');
+  if (saved) editor.setValue(saved);
+  editor.onDidChangeModelContent(()=> localStorage.setItem('sketch', editor.getValue()));
+
+  // Shortcut: Ctrl+Enter = compile
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, compile);
+});
+
+const DEFAULT_SKETCH = `// Arduino Sketch
 void setup() {
-  // Initialize digital pin LED_BUILTIN as an output
   pinMode(LED_BUILTIN, OUTPUT);
   Serial.begin(9600);
+  Serial.println("Hello!");
 }
 
 void loop() {
-  digitalWrite(LED_BUILTIN, HIGH);  // Turn the LED on
-  Serial.println("LED ON");
-  delay(1000);                      // Wait for a second
-  
-  digitalWrite(LED_BUILTIN, LOW);   // Turn the LED off
-  Serial.println("LED OFF");
-  delay(1000);                      // Wait for a second
-}`,
-                language: 'cpp',
-                theme: 'vs-dark',
-                fontSize: 14,
-                fontFamily: 'JetBrains Mono, monospace',
-                minimap: { enabled: true },
-                automaticLayout: true,
-                scrollBeyondLastLine: false,
-                renderWhitespace: 'selection',
-                lineNumbers: 'on',
-                roundedSelection: true,
-                cursorBlinking: 'smooth',
-                cursorSmoothCaretAnimation: true,
-                suggestOnTriggerCharacters: true,
-                quickSuggestions: {
-                    other: true,
-                    comments: false,
-                    strings: false
-                },
-                parameterHints: {
-                    enabled: true
-                },
-                suggest: {
-                    showKeywords: true,
-                    showSnippets: true,
-                    showFunctions: true,
-                    showConstants: true
-                }
-            });
-
-            // Custom theme
-            monaco.editor.defineTheme('arduino-dark', {
-                base: 'vs-dark',
-                inherit: true,
-                rules: [
-                    { token: 'comment', foreground: '6A9955' },
-                    { token: 'keyword', foreground: '00ff88' },
-                    { token: 'string', foreground: 'CE9178' },
-                    { token: 'number', foreground: 'B5CEA8' },
-                ],
-                colors: {
-                    'editor.background': '#1a2332',
-                    'editor.foreground': '#e5e7eb',
-                    'editorCursor.foreground': '#00ff88',
-                    'editor.lineHighlightBackground': '#1f2937',
-                    'editorLineNumber.foreground': '#4b5563',
-                    'editor.selectionBackground': '#00ff8833',
-                    'editor.inactiveSelectionBackground': '#00ff8822'
-                }
-            });
-            monaco.editor.setTheme('arduino-dark');
-
-            logToConsole('✓ Editor initialized successfully', 'success');
-            logToConsole('💡 Start typing Arduino functions for autocomplete (pinMode, digitalWrite, etc.)', 'info');
-        });
-
-        // Console logging
-        function logToConsole(message, type = 'info') {
-            const console = document.getElementById('console');
-            const timestamp = new Date().toLocaleTimeString();
-            const colors = {
-                info: '#9ca3af',
-                success: '#00ff88',
-                error: '#ff4466',
-                warning: '#ffaa00'
-            };
-            
-            const logEntry = document.createElement('div');
-            logEntry.style.color = colors[type];
-            logEntry.style.marginBottom = '0.5rem';
-            logEntry.innerHTML = `<span style="color: #6b7280;">[${timestamp}]</span> ${message}`;
-            
-            console.appendChild(logEntry);
-            console.scrollTop = console.scrollHeight;
-        }
-
-        // Clear console
-        function clearConsole() {
-            document.getElementById('console').innerHTML = '';
-        }
-
-        // Show status
-        function showStatus(elementId, message, type) {
-            const element = document.getElementById(elementId);
-            const icons = {
-                success: '✓',
-                error: '✗',
-                info: 'ℹ',
-                warning: '⚠'
-            };
-            
-            element.innerHTML = `
-                <div class="status-indicator status-${type}">
-                    <span class="status-dot"></span>
-                    <span>${icons[type]} ${message}</span>
-                </div>
-            `;
-        }
-
-        // Clear status
-        function clearStatus(elementId) {
-            document.getElementById(elementId).innerHTML = '';
-        }
-
-        // Compile code
-        async function compileCode() {
-                const code      = editor.getValue();
-                const board     = document.getElementById('boardType').value;
-                const compileBtn = document.getElementById('compileBtn');
-
-                compileBtn.disabled = true;
-                compileBtn.innerHTML = '<span><div class="spinner"></div>Compiling...</span>';
-                clearStatus('compileStatus');
-                
-                logToConsole('🔨 Starting compilation...', 'info');
-                logToConsole(`Board: ${board.toUpperCase()} | Repo: Narek-D8v/arduino-web-compiler`, 'info');
-
-                try {
-                    const response = await fetch('/api/compile', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            code:      code,
-                            board:     board,
-                            timestamp: new Date().toISOString()
-                        })
-                    });
-
-                    const result = await response.json();
-
-                    if (result.success) {
-                        showStatus('compileStatus', `Compilation triggered for ${board.toUpperCase()}!`, 'success');
-                        logToConsole('✓ Compilation request sent to GitHub Actions', 'success');
-                        logToConsole('Check your repository Actions tab for build status', 'info');
-                        logToConsole(`Timestamp: ${result.timestamp}`, 'info');
-                    } else {
-                        throw new Error(result.error || 'Unknown error occurred');
-                    }
-                } catch (error) {
-                    showStatus('compileStatus', 'Compilation failed', 'error');
-                    logToConsole(`✗ Error: ${error.message}`, 'error');
-                    console.error(error);
-                } finally {
-                    compileBtn.disabled = false;
-                    compileBtn.innerHTML = '<span>🔨 Compile</span>';
-                }
-        }
-
-        // Connect to Serial Port
-        async function connectSerial() {
-            const connectBtn = document.getElementById('connectBtn');
-            const flashBtn = document.getElementById('flashBtn');
-            const serialStartBtn = document.getElementById('serialStartBtn');
-            const portStatus = document.getElementById('portStatus');
-            const boardType = document.getElementById('boardType').value;
-
-            try {
-                if (!navigator.serial) {
-                    throw new Error('Web Serial API not supported. Please use Chrome, Edge, or Opera.');
-                }
-
-                logToConsole('🔌 Requesting serial port access...', 'info');
-                connectBtn.disabled = true;
-                connectBtn.innerHTML = '<span><div class="spinner"></div>Connecting...</span>';
-
-                // Different USB vendor IDs for different boards
-                const filters = [
-                    { usbVendorId: 0x2341 }, // Arduino
-                    { usbVendorId: 0x1a86 }, // CH340
-                    { usbVendorId: 0x0403 }, // FTDI
-                    { usbVendorId: 0x10c4 }, // Silicon Labs CP210x (ESP32)
-                    { usbVendorId: 0x1a86 }, // CH9102 (ESP32)
-                    { usbVendorId: 0x303a }  // Espressif USB JTAG/serial debug unit (ESP32-S2/S3/C3)
-                ];
-
-                serialPort = await navigator.serial.requestPort({ filters });
-
-                const baudRate = parseInt(document.getElementById('baudRate').value);
-                
-                await serialPort.open({ baudRate: baudRate });
-
-                // Get writer for sending data
-                serialWriter = serialPort.writable.getWriter();
-
-                const boardName = boardType.toUpperCase().replace(/-/g, ' ');
-                logToConsole(`✓ Connected to ${boardName} at ${baudRate} baud`, 'success');
-                portStatus.innerHTML = `<span class="text-accent-primary">● Connected to ${boardName} at ${baudRate} baud</span>`;
-
-                // Enable flash and serial monitor buttons
-                flashBtn.disabled = false;
-                serialStartBtn.disabled = false;
-                connectBtn.innerHTML = '<span>🔌 Connected</span>';
-                connectBtn.disabled = true;
-
-            } catch (error) {
-                logToConsole(`✗ Connection error: ${error.message}`, 'error');
-                portStatus.innerHTML = `<span class="text-error">● Disconnected</span>`;
-                connectBtn.disabled = false;
-                connectBtn.innerHTML = '<span>🔌 Connect to Board</span>';
-            }
-        }
-
-        // Disconnect Serial Port
-        async function disconnectSerial() {
-            try {
-                if (isSerialReading) {
-                    await stopSerialMonitor();
-                }
-
-                if (serialWriter) {
-                    await serialWriter.releaseLock();
-                    serialWriter = null;
-                }
-
-                if (serialPort) {
-                    await serialPort.close();
-                    serialPort = null;
-                }
-
-                document.getElementById('flashBtn').disabled = true;
-                document.getElementById('serialStartBtn').disabled = true;
-                document.getElementById('connectBtn').disabled = false;
-                document.getElementById('connectBtn').innerHTML = '<span>🔌 Connect to Board</span>';
-                document.getElementById('portStatus').innerHTML = `<span class="text-text-secondary">● Disconnected</span>`;
-
-                logToConsole('✓ Serial port disconnected', 'info');
-            } catch (error) {
-                logToConsole(`✗ Disconnect error: ${error.message}`, 'error');
-            }
-        }
-
-        // ─── Intel HEX parser ────────────────────────────────────────────────────
-        function parseIntelHex(hexText) {
-            const pages = [];
-            let baseAddr = 0;
-
-            for (const rawLine of hexText.split('\n')) {
-                const line = rawLine.trim();
-                if (!line.startsWith(':')) continue;
-
-                const bytes     = line.slice(1).match(/.{2}/g).map(b => parseInt(b, 16));
-                const byteCount = bytes[0];
-                const addr      = (bytes[1] << 8) | bytes[2];
-                const recType   = bytes[3];
-                const data      = bytes.slice(4, 4 + byteCount);
-
-                if (recType === 0x00) {                         // data record
-                    pages.push({ address: baseAddr + addr, data });
-                } else if (recType === 0x02) {                  // extended segment address
-                    baseAddr = ((data[0] << 8) | data[1]) << 4;
-                } else if (recType === 0x04) {                  // extended linear address
-                    baseAddr = ((data[0] << 8) | data[1]) << 16;
-                } else if (recType === 0x01) {                  // EOF
-                    break;
-                }
-            }
-
-            // Merge pages → flat Uint8Array
-            if (pages.length === 0) throw new Error('HEX file contains no data records');
-            const maxAddr = Math.max(...pages.map(p => p.address + p.data.length));
-            const binary  = new Uint8Array(maxAddr).fill(0xFF);
-            pages.forEach(p => binary.set(p.data, p.address));
-            return binary;
-        }
-
-        // ─── STK500v1 flasher (pure Web Serial, no Node fs) ──────────────────────
-        class STK500Flasher {
-            constructor(port) {
-                this.port   = port;
-                this.reader = null;
-                this.writer = null;
-                this.buf    = [];
-
-                // Arduino Uno / Nano page size = 128 bytes
-                this.PAGE_SIZE   = 128;
-                this.FLASH_SIZE  = 32768;
-
-                // STK500 constants
-                this.Resp_STK_OK        = 0x10;
-                this.Resp_STK_INSYNC    = 0x14;
-                this.Cmnd_STK_GET_SYNC  = 0x30;
-                this.Cmnd_STK_ENTER_PROGMODE = 0x50;
-                this.Cmnd_STK_LEAVE_PROGMODE = 0x51;
-                this.Cmnd_STK_LOAD_ADDRESS   = 0x55;
-                this.Cmnd_STK_PROG_PAGE      = 0x64;
-                this.Sync_CRC_EOP            = 0x20;
-            }
-
-            async open() {
-                // Close/reopen at 115200 for bootloader
-                if (this.port.readable || this.port.writable) {
-                    try {
-                        if (serialWriter) { await serialWriter.releaseLock(); serialWriter = null; }
-                        if (serialReader) { await serialReader.cancel(); await serialReader.releaseLock(); serialReader = null; }
-                        await this.port.close();
-                    } catch(_) {}
-                }
-                await this.port.open({ baudRate: 115200, bufferSize: 4096 });
-                this.writer = this.port.writable.getWriter();
-                this.reader = this.port.readable.getReader();
-            }
-
-            async close() {
-                try { await this.reader.cancel(); } catch(_) {}
-                try { this.reader.releaseLock(); } catch(_) {}
-                try { this.writer.releaseLock(); } catch(_) {}
-                try { await this.port.close(); } catch(_) {}
-                this.reader = null;
-                this.writer = null;
-            }
-
-            async send(bytes) {
-                await this.writer.write(new Uint8Array(bytes));
-            }
-
-            async readByte(timeoutMs = 2000) {
-                if (this.buf.length > 0) return this.buf.shift();
-                return new Promise((resolve, reject) => {
-                    const t = setTimeout(() => reject(new Error('STK500 read timeout')), timeoutMs);
-                    const read = async () => {
-                        try {
-                            const { value, done } = await this.reader.read();
-                            clearTimeout(t);
-                            if (done || !value) return reject(new Error('Port closed'));
-                            for (const b of value) this.buf.push(b);
-                            resolve(this.buf.shift());
-                        } catch(e) { clearTimeout(t); reject(e); }
-                    };
-                    read();
-                });
-            }
-
-            async expect(byte, timeoutMs = 2000) {
-                const got = await this.readByte(timeoutMs);
-                if (got !== byte) throw new Error(`STK500 protocol error: expected 0x${byte.toString(16)}, got 0x${got.toString(16)}`);
-            }
-
-            // DTR pulse → resets Arduino into bootloader
-            async resetBoard() {
-                try {
-                    await this.port.setSignals({ dataTerminalReady: false });
-                    await new Promise(r => setTimeout(r, 250));
-                    await this.port.setSignals({ dataTerminalReady: true });
-                    await new Promise(r => setTimeout(r, 50));
-                } catch(_) {
-                    // Some drivers don't support setSignals — continue anyway
-                }
-            }
-
-            async sync(retries = 10) {
-                for (let i = 0; i < retries; i++) {
-                    try {
-                        this.buf = [];
-                        await this.send([this.Cmnd_STK_GET_SYNC, this.Sync_CRC_EOP]);
-                        await this.expect(this.Resp_STK_INSYNC, 400);
-                        await this.expect(this.Resp_STK_OK, 400);
-                        return;
-                    } catch(_) {
-                        await new Promise(r => setTimeout(r, 100));
-                    }
-                }
-                throw new Error('Cannot sync with bootloader. Is the board connected and reset?');
-            }
-
-            async enterProgMode() {
-                await this.send([this.Cmnd_STK_ENTER_PROGMODE, this.Sync_CRC_EOP]);
-                await this.expect(this.Resp_STK_INSYNC);
-                await this.expect(this.Resp_STK_OK);
-            }
-
-            async leaveProgMode() {
-                await this.send([this.Cmnd_STK_LEAVE_PROGMODE, this.Sync_CRC_EOP]);
-                await this.expect(this.Resp_STK_INSYNC);
-                await this.expect(this.Resp_STK_OK);
-            }
-
-            async loadAddress(wordAddr) {
-                await this.send([
-                    this.Cmnd_STK_LOAD_ADDRESS,
-                    wordAddr & 0xFF,
-                    (wordAddr >> 8) & 0xFF,
-                    this.Sync_CRC_EOP
-                ]);
-                await this.expect(this.Resp_STK_INSYNC);
-                await this.expect(this.Resp_STK_OK);
-            }
-
-            async writePage(data) {
-                const len = data.length;
-                const cmd = [
-                    this.Cmnd_STK_PROG_PAGE,
-                    (len >> 8) & 0xFF,
-                    len & 0xFF,
-                    0x46, // 'F' = flash memory
-                    ...data,
-                    this.Sync_CRC_EOP
-                ];
-                await this.send(cmd);
-                await this.expect(this.Resp_STK_INSYNC, 5000);
-                await this.expect(this.Resp_STK_OK,     5000);
-            }
-
-            async flash(binary, onProgress) {
-                const totalPages = Math.ceil(binary.length / this.PAGE_SIZE);
-                for (let page = 0; page < totalPages; page++) {
-                    const byteAddr = page * this.PAGE_SIZE;
-                    const wordAddr = byteAddr >> 1;
-                    const slice    = binary.slice(byteAddr, byteAddr + this.PAGE_SIZE);
-                    const pageData = new Uint8Array(this.PAGE_SIZE).fill(0xFF);
-                    pageData.set(slice);
-
-                    await this.loadAddress(wordAddr);
-                    await this.writePage(Array.from(pageData));
-
-                    if (onProgress) onProgress(page + 1, totalPages);
-                }
-            }
-        }
-
-        // ─── Helpers ─────────────────────────────────────────────────────────────
-        function isESP32Board(boardType) {
-            return boardType.startsWith('esp32');
-        }
-
-        // ─── ESP32 flasher via esptool-js ─────────────────────────────────────────
-
-        // Parse ESP32 partition table binary to find app0 address
-        function parsePartitionTable(buf) {
-            const view = new DataView(buf);
-            // Each entry is 32 bytes, magic = 0xAA50
-            for (let i = 0; i + 32 <= buf.byteLength; i += 32) {
-                const magic = view.getUint16(i, true);
-                if (magic !== 0xAA50) continue;
-                const type    = view.getUint8(i + 2);   // 0 = app
-                const subtype = view.getUint8(i + 3);   // 0 = factory / ota_0
-                const offset  = view.getUint32(i + 4, true);
-                if (type === 0x00 && (subtype === 0x00 || subtype === 0x10)) {
-                    return offset; // factory or ota_0
-                }
-            }
-            return 0x10000; // fallback
-        }
-
-        async function flashESP32(port, binData) {
-            logToConsole('📦 Loading esptool-js...', 'info');
-            const { ESPLoader, Transport } = await import('https://unpkg.com/esptool-js@0.6.0/bundle.js');
-
-            if (serialWriter) { try { await serialWriter.releaseLock(); } catch(_) {} serialWriter = null; }
-            if (serialReader) { try { await serialReader.cancel(); await serialReader.releaseLock(); } catch(_) {} serialReader = null; }
-            try { await port.close(); } catch(_) {}
-
-            logToConsole('🔌 Creating ESPTool Transport...', 'info');
-            const transport = new Transport(port, true);
-
-            const terminal = {
-                clean()         {},
-                writeLine(line) { if (line.trim()) logToConsole(`   ${line}`, 'info'); },
-                write(chunk)    {}
-            };
-
-            const loader = new ESPLoader({ transport, baudrate: 115200, terminal, debugLogging: false });
-
-            logToConsole('🤝 Connecting to ESP32 bootloader (hold BOOT if needed)...', 'info');
-            showStatus('flashStatus', 'Connecting to ESP32...', 'info');
-
-            const chipName = await loader.main();
-            logToConsole(`✓ Connected — chip: ${chipName}`, 'success');
-
-            // ── Download all 4 ESP32 files ───────────────────────────────────────
-            const BASE = `https://raw.githubusercontent.com/Narek-D8v/arduino-web-compiler/builds`;
-            const t    = Date.now();
-
-            logToConsole('📥 Downloading ESP32 flash files...', 'info');
-            showStatus('flashStatus', 'Downloading files...', 'info');
-
-            async function downloadBin(filename) {
-                const resp = await fetch(`${BASE}/${filename}?t=${t}`, { cache: 'no-store' });
-                if (!resp.ok) throw new Error(`${filename} not found in builds branch (${resp.status})`);
-                const buf = await resp.arrayBuffer();
-                logToConsole(`   ✓ ${filename} — ${buf.byteLength} bytes`, 'success');
-                return buf;
-            }
-
-            const [bootBuf, partBuf, bootAppBuf, firmBuf] = await Promise.all([
-                downloadBin('bootloader.bin'),
-                downloadBin('partitions.bin'),
-                downloadBin('boot_app0.bin'),
-                downloadBin('firmware.bin'),
-            ]);
-
-            // Parse partition table to get the real app address
-            const appAddress = parsePartitionTable(partBuf);
-            logToConsole(`   App address from partition table: 0x${appAddress.toString(16)}`, 'info');
-
-            function toStr(buf) {
-                return Array.from(new Uint8Array(buf), b => String.fromCharCode(b)).join('');
-            }
-
-            const fileArray = [
-                { data: toStr(bootBuf),    address: 0x1000      },
-                { data: toStr(partBuf),    address: 0x8000      },
-                { data: toStr(bootAppBuf), address: 0xe000      },
-                { data: toStr(firmBuf),    address: appAddress  },
-            ];
-
-            logToConsole(`⚡ Flashing 4 files (app @ 0x${appAddress.toString(16)})...`, 'info');
-            showStatus('flashStatus', 'Writing firmware...', 'info');
-
-            const labels = ['bootloader.bin', 'partitions.bin', 'boot_app0.bin', 'firmware.bin'];
-
-            await loader.writeFlash({
-                fileArray,
-                flashSize:  'keep',
-                flashMode:  'keep',
-                flashFreq:  'keep',
-                eraseAll:   false,
-                compress:   true,
-                reportProgress(fileIndex, written, total) {
-                    const pct  = Math.round((written / total) * 100);
-                    const name = labels[fileIndex] ?? `file ${fileIndex}`;
-                    if (pct % 25 === 0 || written === total) {
-                        logToConsole(`   ${name}: ${pct}%`, 'info');
-                        showStatus('flashStatus', `Writing ${name}... ${pct}%`, 'info');
-                    }
-                }
-            });
-
-            logToConsole('🔄 Resetting ESP32...', 'info');
-            await loader.hardReset();
-            await transport.disconnect();
-            logToConsole('✓ ESP32 flashed successfully!', 'success');
-        }
-
-        // ─── Main flash entry point ───────────────────────────────────────────────
-        async function flashArduino() {
-            if (!serialPort) {
-                showStatus('flashStatus', 'Please connect to board first', 'error');
-                logToConsole('✗ No serial port connected. Click "Connect to Board" first.', 'error');
-                return;
-            }
-
-            const flashBtn  = document.getElementById('flashBtn');
-            const boardType = document.getElementById('boardType').value;
-            const esp32     = isESP32Board(boardType);
-
-            flashBtn.disabled = true;
-            flashBtn.innerHTML = '<span><div class="spinner"></div>Flashing...</span>';
-            clearStatus('flashStatus');
-
-            const wasReading = isSerialReading;
-            if (wasReading) await stopSerialMonitor();
-
-            try {
-                // ── 1. Download firmware ────────────────────────────────────────────
-                if (esp32) {
-                    // ESP32 downloads all 4 files internally in flashESP32()
-                    logToConsole('⚡ Starting ESP32 flash sequence...', 'info');
-                    await flashESP32(serialPort, null);
-                } else {
-                    // ── AVR: download .hex then flash via STK500 ─────────────────────
-                    const url = `https://raw.githubusercontent.com/Narek-D8v/arduino-web-compiler/builds/firmware.hex?t=${Date.now()}`;
-                    logToConsole('📥 Downloading firmware.hex...', 'info');
-                    showStatus('flashStatus', 'Downloading firmware...', 'info');
-
-                    const resp = await fetch(url, { cache: 'no-store' });
-                    if (!resp.ok) throw new Error(`HTTP ${resp.status} — firmware.hex not found in builds branch`);
-
-                    const binData = new Uint8Array(await resp.arrayBuffer());
-                    logToConsole(`✓ Firmware downloaded — ${binData.length} bytes`, 'success');
-                    // ── AVR path: STK500v1 (Uno / Nano / Mega / Leonardo) ────────
-                    const flasher = new STK500Flasher(serialPort);
-
-                    try {
-                        logToConsole('🔌 Opening port at 115200 baud...', 'info');
-                        showStatus('flashStatus', 'Connecting to bootloader...', 'info');
-                        await flasher.open();
-
-                        logToConsole('🔄 Resetting board into bootloader...', 'info');
-                        await flasher.resetBoard();
-                        await new Promise(r => setTimeout(r, 500));
-
-                        logToConsole('🤝 Syncing with STK500 bootloader...', 'info');
-                        await flasher.sync();
-                        logToConsole('✓ Bootloader sync OK', 'success');
-
-                        await flasher.enterProgMode();
-                        logToConsole('✓ Programming mode entered', 'success');
-
-                        logToConsole('⚡ Writing flash pages...', 'info');
-                        showStatus('flashStatus', 'Writing firmware...', 'info');
-
-                        await flasher.flash(binData, (done, total) => {
-                            const pct = Math.round((done / total) * 100);
-                            if (done % 10 === 0 || done === total) {
-                                logToConsole(`   Writing page ${done}/${total} (${pct}%)`, 'info');
-                                showStatus('flashStatus', `Writing firmware... ${pct}%`, 'info');
-                            }
-                        });
-
-                        await flasher.leaveProgMode();
-                        logToConsole('✓ Left programming mode', 'success');
-
-                    } finally {
-                        try { await flasher.close(); } catch(_) {}
-                    }
-                }
-
-                showStatus('flashStatus', 'Flash completed successfully! 🎉', 'success');
-                logToConsole(`✓ Done! ${boardType.toUpperCase()} flashed successfully.`, 'success');
-                logToConsole('Your device is now running the new firmware.', 'success');
-
-            } catch (err) {
-                showStatus('flashStatus', 'Flash failed', 'error');
-                logToConsole(`✗ Flash error: ${err.message}`, 'error');
-                console.error('Full flash error:', err);
-            } finally {
-                // Reopen port for serial monitor
-                try {
-                    const baud = parseInt(document.getElementById('baudRate').value);
-                    await serialPort.open({ baudRate: baud });
-                    serialWriter = serialPort.writable.getWriter();
-                    document.getElementById('portStatus').innerHTML =
-                        `<span class="text-accent-primary">● Reconnected at ${baud} baud</span>`;
-                    if (wasReading) setTimeout(() => startSerialMonitor(), 800);
-                } catch(_) {}
-
-                flashBtn.disabled = false;
-                flashBtn.innerHTML = '<span>⚡ Flash Device</span>';
-            }
-        }
-
-        // Serial Monitor Functions
-        function logToSerialMonitor(message, color = '#e5e7eb') {
-            const monitor = document.getElementById('serialMonitor');
-            const timestamp = new Date().toLocaleTimeString();
-            
-            const logEntry = document.createElement('div');
-            logEntry.style.color = color;
-            logEntry.style.marginBottom = '0.25rem';
-            logEntry.innerHTML = `<span style="color: #6b7280;">[${timestamp}]</span> ${message}`;
-            
-            monitor.appendChild(logEntry);
-            monitor.scrollTop = monitor.scrollHeight;
-        }
-
-        function clearSerialMonitor() {
-            document.getElementById('serialMonitor').innerHTML = '';
-            logToSerialMonitor('Serial monitor cleared', '#9ca3af');
-        }
-
-        async function startSerialMonitor() {
-            if (!serialPort) {
-                logToConsole('✗ No serial port connected', 'error');
-                return;
-            }
-
-            if (isSerialReading) {
-                logToConsole('⚠ Serial monitor already running', 'warning');
-                return;
-            }
-
-            try {
-                const serialBaudRate = parseInt(document.getElementById('serialBaudRate').value);
-
-                // Close and reopen port with new baud rate if different
-                const currentBaudRate = parseInt(document.getElementById('baudRate').value);
-                if (serialBaudRate !== currentBaudRate) {
-                    logToConsole(`Reconnecting at ${serialBaudRate} baud...`, 'info');
-                    
-                    if (serialWriter) {
-                        await serialWriter.releaseLock();
-                    }
-                    await serialPort.close();
-                    
-                    await serialPort.open({ baudRate: serialBaudRate });
-                    serialWriter = serialPort.writable.getWriter();
-                    
-                    document.getElementById('baudRate').value = serialBaudRate;
-                    document.getElementById('portStatus').innerHTML = `<span class="text-accent-primary">● Connected at ${serialBaudRate} baud</span>`;
-                }
-
-                isSerialReading = true;
-                
-                // Enable/disable buttons
-                document.getElementById('serialStartBtn').disabled = true;
-                document.getElementById('serialStopBtn').disabled = false;
-                document.getElementById('serialInput').disabled = false;
-                document.getElementById('serialSendBtn').disabled = false;
-
-                logToSerialMonitor('=== Serial Monitor Started ===', '#00ff88');
-                logToConsole(`✓ Serial monitor started at ${serialBaudRate} baud`, 'success');
-
-                // Start reading
-                serialReader = serialPort.readable.getReader();
-                
-                while (isSerialReading && serialPort.readable) {
-                    try {
-                        const { value, done } = await serialReader.read();
-                        if (done) break;
-                        
-                        const text = new TextDecoder().decode(value);
-                        logToSerialMonitor(text.trim(), '#e5e7eb');
-                    } catch (error) {
-                        if (isSerialReading) {
-                            logToConsole(`✗ Read error: ${error.message}`, 'error');
-                        }
-                        break;
-                    }
-                }
-
-            } catch (error) {
-                logToConsole(`✗ Serial monitor error: ${error.message}`, 'error');
-                isSerialReading = false;
-            }
-        }
-
-        async function stopSerialMonitor() {
-            if (!isSerialReading) return;
-
-            isSerialReading = false;
-
-            try {
-                if (serialReader) {
-                    await serialReader.cancel();
-                    await serialReader.releaseLock();
-                    serialReader = null;
-                }
-
-                document.getElementById('serialStartBtn').disabled = false;
-                document.getElementById('serialStopBtn').disabled = true;
-                document.getElementById('serialInput').disabled = true;
-                document.getElementById('serialSendBtn').disabled = true;
-
-                logToSerialMonitor('=== Serial Monitor Stopped ===', '#ffaa00');
-                logToConsole('✓ Serial monitor stopped', 'info');
-            } catch (error) {
-                logToConsole(`✗ Error stopping serial monitor: ${error.message}`, 'error');
-            }
-        }
-
-        async function sendSerialData() {
-            if (!serialWriter) {
-                logToConsole('✗ Serial port not ready for writing', 'error');
-                return;
-            }
-
-            const input = document.getElementById('serialInput');
-            const data = input.value;
-
-            if (!data) return;
-
-            try {
-                const encoder = new TextEncoder();
-                await serialWriter.write(encoder.encode(data + '\n'));
-                
-                logToSerialMonitor(`>> ${data}`, '#0099ff');
-                input.value = '';
-            } catch (error) {
-                logToConsole(`✗ Send error: ${error.message}`, 'error');
-            }
-        }
-
-        // Allow Enter key to send serial data
-        document.addEventListener('DOMContentLoaded', function() {
-            const serialInput = document.getElementById('serialInput');
-            if (serialInput) {
-                serialInput.addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter') {
-                        sendSerialData();
-                    }
-                });
-            }
-        });
-
-        // Clear editor
-        function clearEditor() {
-            if (confirm('Are you sure you want to clear the editor?')) {
-                editor.setValue('');
-                logToConsole('Editor cleared', 'info');
-            }
-        }
-
-        // Load example code
-        function loadExample() {
-            const exampleCode = `// Arduino Blink Example with Serial
-const int ledPin = LED_BUILTIN;
-
-void setup() {
-  pinMode(ledPin, OUTPUT);
-  Serial.begin(9600);
-  Serial.println("Arduino Started!");
-}
-
-void loop() {
-  digitalWrite(ledPin, HIGH);
-  Serial.println("LED ON");
+  digitalWrite(LED_BUILTIN, HIGH);
   delay(1000);
-  
-  digitalWrite(ledPin, LOW);
-  Serial.println("LED OFF");
+  digitalWrite(LED_BUILTIN, LOW);
   delay(1000);
 }`;
-            
-            editor.setValue(exampleCode);
-            logToConsole('Example code loaded', 'success');
-        }
 
-        // Check Web Serial API support
-        if (!navigator.serial) {
-            const status = document.getElementById('connectionStatus');
-            status.innerHTML = `
-                <div class="status-indicator status-warning">
-                    <span class="status-dot"></span>
-                    <span>Web Serial not supported in this browser</span>
-                </div>
-            `;
-            logToConsole('⚠ Web Serial API not supported. Flashing will not work.', 'warning');
-            logToConsole('Please use Chrome, Edge, or Opera browser.', 'warning');
-        } else {
-            logToConsole('✓ Web Serial API is available', 'success');
-        }
+// ────────────────────────────────────────────────────────────────────────────
+// Board selector
+// ────────────────────────────────────────────────────────────────────────────
+function boardInfo(){
+  const [board, fqbn] = document.getElementById('board-sel').value.split('|');
+  return { board, fqbn };
+}
 
-        // ─── Library Manager ─────────────────────────────────────────────────────
+function isESP(board){ return board.startsWith('esp32'); }
 
-        const POPULAR_LIBRARIES = [
-            { name: 'Servo',           header: 'Servo.h',           tag: 'Actuators',   desc: 'Control servo motors with precise angle positioning.' },
-            { name: 'Wire',            header: 'Wire.h',            tag: 'I2C',         desc: 'I²C/TWI communication between devices.' },
-            { name: 'SPI',             header: 'SPI.h',             tag: 'SPI',         desc: 'Serial Peripheral Interface bus communication.' },
-            { name: 'EEPROM',          header: 'EEPROM.h',          tag: 'Storage',     desc: 'Read/write data to non-volatile EEPROM memory.' },
-            { name: 'SD',              header: 'SD.h',              tag: 'Storage',     desc: 'Read and write files on SD cards.' },
-            { name: 'Adafruit NeoPixel', header: 'Adafruit_NeoPixel.h', tag: 'LEDs',   desc: 'Drive WS2812/NeoPixel RGB LED strips.' },
-            { name: 'DHT sensor',      header: 'DHT.h',             tag: 'Sensors',     desc: 'DHT11/DHT22 temperature & humidity sensors.' },
-            { name: 'LiquidCrystal',   header: 'LiquidCrystal.h',   tag: 'Display',     desc: 'Interface with HD44780-compatible LCD displays.' },
-            { name: 'LiquidCrystal I2C', header: 'LiquidCrystal_I2C.h', tag: 'Display', desc: 'LCD display via I²C expander (PCF8574).' },
-            { name: 'U8g2',            header: 'U8g2lib.h',         tag: 'Display',     desc: 'Monochrome display library (OLED, LCD).' },
-            { name: 'Adafruit GFX',    header: 'Adafruit_GFX.h',    tag: 'Display',     desc: 'Core graphics library for Adafruit displays.' },
-            { name: 'Adafruit SSD1306', header: 'Adafruit_SSD1306.h', tag: 'Display',  desc: 'SSD1306 128×64 OLED display driver.' },
-            { name: 'TFT_eSPI',        header: 'TFT_eSPI.h',        tag: 'Display',     desc: 'Fast TFT display library optimised for ESP32.' },
-            { name: 'FastLED',         header: 'FastLED.h',         tag: 'LEDs',        desc: 'High-performance LED strip animation library.' },
-            { name: 'Stepper',         header: 'Stepper.h',         tag: 'Actuators',   desc: 'Drive unipolar and bipolar stepper motors.' },
-            { name: 'AccelStepper',    header: 'AccelStepper.h',    tag: 'Actuators',   desc: 'Stepper motor with acceleration and deceleration.' },
-            { name: 'IRremote',        header: 'IRremote.h',        tag: 'Wireless',    desc: 'Send and receive infrared remote control signals.' },
-            { name: 'RF24',            header: 'RF24.h',            tag: 'Wireless',    desc: 'nRF24L01 2.4GHz wireless transceiver driver.' },
-            { name: 'WiFi (ESP32)',    header: 'WiFi.h',            tag: 'Network',     desc: 'Wi-Fi connection for ESP32/ESP8266 boards.' },
-            { name: 'WebServer',       header: 'WebServer.h',       tag: 'Network',     desc: 'Simple HTTP server for ESP32.' },
-            { name: 'HTTPClient',      header: 'HTTPClient.h',      tag: 'Network',     desc: 'HTTP GET/POST client for ESP32/ESP8266.' },
-            { name: 'ArduinoJson',     header: 'ArduinoJson.h',     tag: 'Data',        desc: 'JSON serialization/deserialization library.' },
-            { name: 'PubSubClient',    header: 'PubSubClient.h',    tag: 'Network',     desc: 'MQTT client for publish/subscribe messaging.' },
-            { name: 'Ticker',          header: 'Ticker.h',          tag: 'Timing',      desc: 'Call functions repeatedly at set intervals.' },
-            { name: 'TimerOne',        header: 'TimerOne.h',        tag: 'Timing',      desc: 'Hardware timer-based interrupts for AVR.' },
-            { name: 'OneWire',         header: 'OneWire.h',         tag: 'Sensors',     desc: '1-Wire protocol for Dallas/Maxim sensors.' },
-            { name: 'DallasTemperature', header: 'DallasTemperature.h', tag: 'Sensors', desc: 'DS18B20 digital temperature sensor library.' },
-            { name: 'MPU6050',         header: 'MPU6050.h',         tag: 'Sensors',     desc: 'IMU gyroscope & accelerometer (I²C).' },
-            { name: 'Adafruit BME280', header: 'Adafruit_BME280.h', tag: 'Sensors',     desc: 'BME280 pressure, humidity & temperature sensor.' },
-            { name: 'Adafruit BMP280', header: 'Adafruit_BMP280.h', tag: 'Sensors',     desc: 'BMP280 barometric pressure sensor.' },
-            { name: 'Ultrasonic',      header: 'Ultrasonic.h',      tag: 'Sensors',     desc: 'HC-SR04 ultrasonic distance measurement.' },
-            { name: 'Keypad',          header: 'Keypad.h',          tag: 'Input',       desc: 'Matrix keypad scanning library.' },
-            { name: 'RotaryEncoder',   header: 'RotaryEncoder.h',   tag: 'Input',       desc: 'Read mechanical rotary encoder position.' },
-            { name: 'Bounce2',         header: 'Bounce2.h',         tag: 'Input',       desc: 'Debounce buttons and switches reliably.' },
-            { name: 'Keyboard',        header: 'Keyboard.h',        tag: 'HID',         desc: 'USB HID keyboard emulation (Leonardo/Pro Micro).' },
-            { name: 'Mouse',           header: 'Mouse.h',           tag: 'HID',         desc: 'USB HID mouse emulation (Leonardo/Pro Micro).' },
-            { name: 'SoftwareSerial',  header: 'SoftwareSerial.h',  tag: 'UART',        desc: 'Software-emulated serial port on any pins.' },
-            { name: 'MFRC522',         header: 'MFRC522.h',         tag: 'RFID',        desc: 'RFID/NFC reader module (SPI).' },
-            { name: 'TinyGPS++',       header: 'TinyGPS++.h',       tag: 'GPS',         desc: 'Parse NMEA sentences from GPS modules.' },
-            { name: 'Ethernet',        header: 'Ethernet.h',        tag: 'Network',     desc: 'W5100/W5500 Ethernet shield library.' },
-        ];
+function onBoardChange(){
+  const { board, fqbn } = boardInfo();
+  const esp = isESP(board);
+  document.getElementById('avr-section').style.display = esp ? 'none' : '';
+  document.getElementById('esp-section').style.display = esp ? '' : 'none';
+  if (!esp){
+    // arduino-web-uploader board attr: uno | nano | mega
+    const avrBoard = board === 'mega' ? 'mega' : board === 'nano' ? 'nano' : 'uno';
+    document.getElementById('flash-avr-btn').setAttribute('board', avrBoard);
+  }
+}
 
-        // Installed libraries state
-        let installedLibs = JSON.parse(localStorage.getItem('arduino_libs') || '[]');
+// ────────────────────────────────────────────────────────────────────────────
+// Compile
+// ────────────────────────────────────────────────────────────────────────────
+function setStatus(msg, type){
+  const el = document.getElementById('tb-status');
+  el.textContent = msg;
+  el.className = type;
+}
 
-        function saveLibs() {
-            localStorage.setItem('arduino_libs', JSON.stringify(installedLibs));
-        }
+async function compile(){
+  const { board, fqbn } = boardInfo();
+  const code = editor.getValue();
+  const btn  = document.getElementById('compile-btn');
 
-        function toggleLibraryManager() {
-            const panel = document.getElementById('libraryPanel');
-            const open  = panel.style.display === 'none';
-            panel.style.display = open ? 'block' : 'none';
-            if (open) {
-                renderInstalledBadges();
-                renderPopularLibs(POPULAR_LIBRARIES);
-                initLibSearch();
-            }
-        }
+  btn.disabled = true;
+  btn.textContent = '…';
+  setStatus('Compiling…', 'run');
 
-        function switchLibTab(name, btn) {
-            ['popular','search','import'].forEach(t => {
-                document.getElementById('tab-' + t).style.display = 'none';
-            });
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById('tab-' + name).style.display = 'block';
-            btn.classList.add('active');
-        }
+  try {
+    const res  = await fetch(API, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ code, board, fqbn, timestamp: new Date().toISOString() })
+    });
+    const data = await res.json();
 
-        function isInstalled(header) {
-            return installedLibs.some(l => l.header === header);
-        }
+    if (!data.success) throw new Error(data.error);
 
-        function renderInstalledBadges() {
-            const container = document.getElementById('installedLibraries');
-            const msg       = document.getElementById('noLibsMsg');
-            container.innerHTML = '';
-            if (installedLibs.length === 0) {
-                container.appendChild(Object.assign(document.createElement('span'), {
-                    className: 'text-text-secondary text-sm',
-                    textContent: 'No libraries added yet'
-                }));
-                return;
-            }
-            installedLibs.forEach(lib => {
-                const badge = document.createElement('span');
-                badge.className = 'lib-badge';
-                badge.innerHTML = `${lib.name} <span class="remove-lib" onclick="removeLibrary('${lib.header}')" title="Remove">✕</span>`;
-                container.appendChild(badge);
-            });
-        }
+    setStatus('✓ Build triggered', 'ok');
+    serialLog('Build triggered — waiting for GitHub Actions…','sys');
 
-        function installLibrary(lib) {
-            if (isInstalled(lib.header)) return;
-            installedLibs.push(lib);
-            saveLibs();
-            injectInclude(lib.header);
-            renderInstalledBadges();
-            renderPopularLibs(POPULAR_LIBRARIES);
-            renderSearchResults(document.getElementById('libSearchInput')?.value || '');
-            logToConsole(`📦 Library added: #include <${lib.header}>`, 'success');
-        }
+    // After a delay, refresh flash button URLs
+    setTimeout(()=> refreshFlashUrls(), 5000);
 
-        function removeLibrary(header) {
-            installedLibs = installedLibs.filter(l => l.header !== header);
-            saveLibs();
-            removeInclude(header);
-            renderInstalledBadges();
-            renderPopularLibs(POPULAR_LIBRARIES);
-            renderSearchResults(document.getElementById('libSearchInput')?.value || '');
-            logToConsole(`🗑 Library removed: ${header}`, 'warning');
-        }
+  } catch(e){
+    setStatus('✗ ' + e.message, 'err');
+    serialLog('Compile error: ' + e.message, 'sys');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '▶ Compile';
+  }
+}
 
-        function injectInclude(header) {
-            const code    = editor.getValue();
-            const line    = `#include <${header}>`;
-            if (code.includes(line)) return;
-            // Insert after last existing #include, or at very top
-            const lines   = code.split('\n');
-            let lastInclude = -1;
-            lines.forEach((l, i) => { if (l.trim().startsWith('#include')) lastInclude = i; });
-            lines.splice(lastInclude + 1, 0, line);
-            editor.setValue(lines.join('\n'));
-        }
+function refreshFlashUrls(){
+  const { board } = boardInfo();
+  const t = Date.now();
+  if (isESP(board)){
+    document.getElementById('esp-btn').setAttribute('manifest', `${BUILDS}/manifest.json?t=${t}`);
+  } else {
+    document.getElementById('flash-avr-btn').setAttribute('hex-href', `${BUILDS}/firmware.hex?t=${t}`);
+  }
+}
 
-        function removeInclude(header) {
-            const line = `#include <${header}>`;
-            const code = editor.getValue().split('\n').filter(l => l.trim() !== line).join('\n');
-            editor.setValue(code);
-        }
+// Run on load so buttons have correct URLs from the start
+window.addEventListener('load', ()=>{
+  refreshFlashUrls();
+  onBoardChange();
+});
 
-        function libCardHTML(lib) {
-            const installed = isInstalled(lib.header);
-            return `
-                <div class="lib-card ${installed ? 'installed' : ''}" onclick="${installed ? `removeLibrary('${lib.header}')` : `installLibrary(${JSON.stringify(lib).replace(/"/g, '&quot;')})`}">
-                    <span class="lib-tag">${lib.tag}</span>
-                    <div class="flex justify-between items-start">
-                        <p class="font-bold text-sm mb-1" style="font-family:'Syne',sans-serif;">${lib.name}</p>
-                        <span style="font-size:1.1rem">${installed ? '✅' : '➕'}</span>
-                    </div>
-                    <p class="text-text-secondary" style="font-size:0.78rem;line-height:1.4;">${lib.desc}</p>
-                    <p style="font-size:0.7rem;color:var(--accent-secondary);margin-top:0.4rem;">${lib.header}</p>
-                </div>`;
-        }
+// ────────────────────────────────────────────────────────────────────────────
+// Serial Monitor
+// ────────────────────────────────────────────────────────────────────────────
+let serialPort = null, serialReader = null, serialWriter = null, serialReading = false;
 
-        function renderPopularLibs(list) {
-            document.getElementById('popularLibGrid').innerHTML = list.map(libCardHTML).join('');
-        }
+function serialLog(text, cls='rx'){
+  const out = document.getElementById('serial-out');
+  const div = document.createElement('div');
+  div.className = 'serial-' + cls;
+  div.textContent = text;
+  out.appendChild(div);
+  out.scrollTop = out.scrollHeight;
+}
 
-        function renderSearchResults(query) {
-            const q   = query.toLowerCase().trim();
-            const grid = document.getElementById('searchLibGrid');
-            if (!q) { grid.innerHTML = '<p class="text-text-secondary text-sm">Type to search libraries…</p>'; return; }
-            const res = POPULAR_LIBRARIES.filter(l =>
-                l.name.toLowerCase().includes(q) ||
-                l.header.toLowerCase().includes(q) ||
-                l.tag.toLowerCase().includes(q) ||
-                l.desc.toLowerCase().includes(q)
-            );
-            grid.innerHTML = res.length
-                ? res.map(libCardHTML).join('')
-                : '<p class="text-text-secondary text-sm">No libraries found. Try the Import tab to add a custom one.</p>';
-        }
+async function serialConnect(){
+  try {
+    if (!navigator.serial) throw new Error('Web Serial not supported — use Chrome or Edge');
+    const baud = parseInt(document.getElementById('serial-baud').value);
+    serialPort = await navigator.serial.requestPort();
+    await serialPort.open({ baudRate: baud });
+    serialWriter = serialPort.writable.getWriter();
+    serialLog(`Connected at ${baud} baud`, 'sys');
+    document.getElementById('sc-connect').disabled    = true;
+    document.getElementById('sc-disconnect').disabled = false;
+    document.getElementById('serial-input').disabled  = false;
+    document.getElementById('serial-send').disabled   = false;
+    document.getElementById('sc-connect').classList.remove('active');
+    document.getElementById('sc-disconnect').classList.add('active');
+    serialReading = true;
+    readSerial();
+  } catch(e){
+    serialLog('Error: ' + e.message, 'sys');
+  }
+}
 
-        function initLibSearch() {
-            const input = document.getElementById('libSearchInput');
-            if (input._bound) return;
-            input._bound = true;
-            input.addEventListener('input', e => renderSearchResults(e.target.value));
-        }
+async function readSerial(){
+  const dec = new TextDecoder();
+  let buf = '';
+  try {
+    serialReader = serialPort.readable.getReader();
+    while (serialReading){
+      const { value, done } = await serialReader.read();
+      if (done) break;
+      buf += dec.decode(value);
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      lines.forEach(l => l && serialLog(l, 'rx'));
+    }
+  } catch(e){ if(serialReading) serialLog('Read error: '+e.message,'sys'); }
+}
 
-        // ZIP import — автоматически пушит в /libraries/ репозитория
-        async function importLibraryZip(input) {
-            const file = input.files[0];
-            if (!file) return;
+async function serialDisconnect(){
+  serialReading = false;
+  try { await serialReader?.cancel(); serialReader?.releaseLock(); } catch(_){}
+  try { serialWriter?.releaseLock(); } catch(_){}
+  try { await serialPort?.close(); } catch(_){}
+  serialPort = serialReader = serialWriter = null;
+  serialLog('Disconnected','sys');
+  document.getElementById('sc-connect').disabled    = false;
+  document.getElementById('sc-disconnect').disabled = true;
+  document.getElementById('serial-input').disabled  = true;
+  document.getElementById('serial-send').disabled   = true;
+  document.getElementById('sc-connect').classList.remove('active');
+  document.getElementById('sc-disconnect').classList.remove('active');
+}
 
-            const name   = file.name.replace(/\.zip$/i, '');
-            const header = name + '.h';
-            const lib    = { name, header, tag: 'Custom', desc: `Imported from ${file.name}` };
+async function serialSend(){
+  const inp  = document.getElementById('serial-input');
+  const text = inp.value;
+  if (!text || !serialWriter) return;
+  await serialWriter.write(new TextEncoder().encode(text + '\n'));
+  serialLog('> ' + text, 'tx');
+  inp.value = '';
+}
 
-            showStatus('importStatus', 'Uploading to repository...', 'info');
-            logToConsole(`📁 Uploading library "${file.name}" to GitHub...`, 'info');
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('serial-input').addEventListener('keydown', e=>{
+    if (e.key === 'Enter') serialSend();
+  });
+});
 
-            try {
-                // Читаем файл как base64
-                const base64 = await new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload  = () => resolve(reader.result.split(',')[1]);
-                    reader.onerror = () => reject(new Error('Failed to read file'));
-                    reader.readAsDataURL(file);
-                });
+function serialClear(){ document.getElementById('serial-out').innerHTML=''; }
 
-                // Пушим через Vercel API
-                const response = await fetch('/api/upload-library', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ filename: file.name, content: base64 })
-                });
+// ────────────────────────────────────────────────────────────────────────────
+// Library Manager
+// ────────────────────────────────────────────────────────────────────────────
+const LIBS = [
+  {name:'Servo',           header:'Servo.h',              tag:'Actuator'},
+  {name:'AccelStepper',   header:'AccelStepper.h',        tag:'Actuator'},
+  {name:'Wire (I2C)',     header:'Wire.h',                tag:'Comms'},
+  {name:'SPI',            header:'SPI.h',                 tag:'Comms'},
+  {name:'SoftwareSerial', header:'SoftwareSerial.h',      tag:'Comms'},
+  {name:'Adafruit NeoPixel', header:'Adafruit_NeoPixel.h',tag:'LED'},
+  {name:'FastLED',        header:'FastLED.h',             tag:'LED'},
+  {name:'DHT',            header:'DHT.h',                 tag:'Sensor'},
+  {name:'OneWire',        header:'OneWire.h',             tag:'Sensor'},
+  {name:'DallasTemperature', header:'DallasTemperature.h',tag:'Sensor'},
+  {name:'MPU6050',        header:'MPU6050.h',             tag:'Sensor'},
+  {name:'Adafruit BME280',header:'Adafruit_BME280.h',     tag:'Sensor'},
+  {name:'Ultrasonic',     header:'Ultrasonic.h',          tag:'Sensor'},
+  {name:'MFRC522',        header:'MFRC522.h',             tag:'RFID'},
+  {name:'TinyGPS++',      header:'TinyGPS++.h',           tag:'GPS'},
+  {name:'LiquidCrystal',  header:'LiquidCrystal.h',       tag:'Display'},
+  {name:'LiquidCrystal I2C', header:'LiquidCrystal_I2C.h',tag:'Display'},
+  {name:'Adafruit SSD1306', header:'Adafruit_SSD1306.h',  tag:'Display'},
+  {name:'Adafruit GFX',   header:'Adafruit_GFX.h',        tag:'Display'},
+  {name:'U8g2',           header:'U8g2lib.h',             tag:'Display'},
+  {name:'TFT_eSPI',       header:'TFT_eSPI.h',            tag:'Display'},
+  {name:'ArduinoJson',    header:'ArduinoJson.h',         tag:'Data'},
+  {name:'PubSubClient',   header:'PubSubClient.h',        tag:'Network'},
+  {name:'WiFi',           header:'WiFi.h',                tag:'Network'},
+  {name:'HTTPClient',     header:'HTTPClient.h',          tag:'Network'},
+  {name:'SD',             header:'SD.h',                  tag:'Storage'},
+  {name:'EEPROM',         header:'EEPROM.h',              tag:'Storage'},
+  {name:'IRremote',       header:'IRremote.h',            tag:'Wireless'},
+  {name:'RF24',           header:'RF24.h',                tag:'Wireless'},
+  {name:'Keypad',         header:'Keypad.h',              tag:'Input'},
+  {name:'Bounce2',        header:'Bounce2.h',             tag:'Input'},
+  {name:'TimerOne',       header:'TimerOne.h',            tag:'Timing'},
+];
 
-                const result = await response.json();
+let installedLibs = JSON.parse(localStorage.getItem('libs') || '[]');
 
-                if (result.success) {
-                    installLibrary(lib);
-                    const action = result.updated ? 'updated' : 'uploaded';
-                    showStatus('importStatus', `✓ Library ${action}: ${file.name}`, 'success');
-                    logToConsole(`✓ "${file.name}" ${action} to /libraries/ in repository`, 'success');
-                    logToConsole(`📦 Added: #include <${header}>`, 'success');
-                } else {
-                    throw new Error(result.error || 'Upload failed');
-                }
+function saveLibs(){ localStorage.setItem('libs', JSON.stringify(installedLibs)); }
 
-            } catch (error) {
-                showStatus('importStatus', `Upload failed: ${error.message}`, 'error');
-                logToConsole(`✗ Failed to upload library: ${error.message}`, 'error');
-                logToConsole('You can manually add the ZIP to /libraries/ in your repository.', 'warning');
-            }
+function openLibs(){
+  renderInstalledBadges();
+  renderLibGrid(LIBS, 'popular-grid');
+  document.getElementById('lib-panel').classList.add('open');
+}
+function closeLibs(){ document.getElementById('lib-panel').classList.remove('open'); }
+document.getElementById('lib-panel').addEventListener('click', e=>{
+  if (e.target === document.getElementById('lib-panel')) closeLibs();
+});
 
-            input.value = '';
-        }
+function switchLibTab(name, btn){
+  document.querySelectorAll('[id^="tab-"]').forEach(el=>el.style.display='none');
+  document.querySelectorAll('.lib-tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+name).style.display='';
+  btn.classList.add('active');
+}
 
-        // Custom include line
-        function addCustomInclude() {
-            let val = document.getElementById('customLibUrl').value.trim();
-            if (!val) return;
-            // Accept "#include <Foo.h>", "<Foo.h>", "Foo.h", or just "Foo"
-            let header = val.replace(/^#include\s*/i, '').replace(/[<>"]/g, '').trim();
-            if (!header.endsWith('.h')) header += '.h';
-            const name = header.replace(/\.h$/i, '');
-            if (isInstalled(header)) {
-                showStatus('importStatus', `${header} already added`, 'warning');
-                return;
-            }
-            const lib = { name, header, tag: 'Custom', desc: 'Manually added include.' };
-            installLibrary(lib);
-            document.getElementById('customLibUrl').value = '';
-            showStatus('importStatus', `Added: #include <${header}>`, 'success');
-        }
+function isInstalled(header){ return installedLibs.some(l=>l.header===header); }
 
-        // Drag-and-drop on drop zone
-        window.addEventListener('DOMContentLoaded', () => {
-            const dz = document.getElementById('dropZone');
-            if (!dz) return;
-            dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
-            dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
-            dz.addEventListener('drop', e => {
-                e.preventDefault();
-                dz.classList.remove('drag-over');
-                const file = e.dataTransfer.files[0];
-                if (file && file.name.endsWith('.zip')) {
-                    importLibraryZip({ files: [file] });
-                }
-            });
-        });
+function renderInstalledBadges(){
+  const c = document.getElementById('installed-list');
+  c.innerHTML = '';
+  if (!installedLibs.length){
+    c.innerHTML='<span style="color:var(--muted);font-size:12px">None yet</span>';
+    return;
+  }
+  installedLibs.forEach(lib=>{
+    const b = document.createElement('span');
+    b.className = 'installed-badge';
+    b.innerHTML = `${lib.name} <button onclick="removeLib('${lib.header}')">✕</button>`;
+    c.appendChild(b);
+  });
+}
 
-        // Restore installed libraries into editor on load
-        window.addEventListener('load', () => {
-            // Re-inject on editor ready — handled by Monaco onDidChangeModel / initial value
-        });
+function renderLibGrid(list, gridId){
+  const grid = document.getElementById(gridId);
+  grid.innerHTML = '';
+  list.forEach(lib=>{
+    const inst = isInstalled(lib.header);
+    const card = document.createElement('div');
+    card.className = 'lib-card' + (inst?' installed':'');
+    card.innerHTML = `
+      <span class="lib-toggle">${inst?'✅':'➕'}</span>
+      <div class="lib-name">${lib.name}</div>
+      <div class="lib-sub">${lib.header} · <span style="color:var(--blue)">${lib.tag}</span></div>`;
+    card.onclick = ()=> inst ? removeLib(lib.header) : addLib(lib);
+    grid.appendChild(card);
+  });
+}
 
-        // ─── Keyboard shortcuts ──────────────────────────────────────────────────
-        window.addEventListener('keydown', (e) => {
-            // Ctrl/Cmd + Enter to compile
-            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                e.preventDefault();
-                compileCode();
-            }
-            // Ctrl/Cmd + Shift + F to flash
-            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'F') {
-                e.preventDefault();
-                flashArduino();
-            }
-        });
+function addLib(lib){
+  if (isInstalled(lib.header)) return;
+  installedLibs.push(lib);
+  saveLibs();
+  injectInclude(lib.header);
+  renderInstalledBadges();
+  renderLibGrid(LIBS,'popular-grid');
+  searchLibs(document.getElementById('lib-search').value);
+}
 
-        logToConsole('💡 Tip: Press Ctrl+Enter to compile, Ctrl+Shift+F to flash', 'info');
-    </script>
+function removeLib(header){
+  installedLibs = installedLibs.filter(l=>l.header!==header);
+  saveLibs();
+  removeInclude(header);
+  renderInstalledBadges();
+  renderLibGrid(LIBS,'popular-grid');
+  searchLibs(document.getElementById('lib-search').value);
+}
+
+function injectInclude(header){
+  const lines = editor.getValue().split('\n');
+  const line  = `#include <${header}>`;
+  if (lines.includes(line)) return;
+  let last = -1;
+  lines.forEach((l,i)=>{ if(l.trim().startsWith('#include')) last=i; });
+  lines.splice(last+1, 0, line);
+  editor.setValue(lines.join('\n'));
+}
+
+function removeInclude(header){
+  const line = `#include <${header}>`;
+  editor.setValue(editor.getValue().split('\n').filter(l=>l.trim()!==line).join('\n'));
+}
+
+function searchLibs(q){
+  const grid = document.getElementById('search-grid');
+  if (!q.trim()){ grid.innerHTML='<div style="color:var(--muted);font-size:13px">Type to search…</div>'; return; }
+  const res = LIBS.filter(l=>
+    l.name.toLowerCase().includes(q.toLowerCase()) ||
+    l.header.toLowerCase().includes(q.toLowerCase()) ||
+    l.tag.toLowerCase().includes(q.toLowerCase())
+  );
+  renderLibGrid(res.length ? res : [], 'search-grid');
+  if (!res.length) grid.innerHTML='<div style="color:var(--muted);font-size:13px">No results — try Custom tab</div>';
+}
+
+// ZIP import — uploads to GitHub via API
+async function importZip(input){
+  const file = input.files[0];
+  if (!file) return;
+  const st  = document.getElementById('import-status');
+  st.style.color = 'var(--muted)';
+  st.textContent = 'Uploading…';
+
+  try {
+    const b64 = await new Promise((res,rej)=>{
+      const r = new FileReader();
+      r.onload = ()=> res(r.result.split(',')[1]);
+      r.onerror = ()=> rej(new Error('Read failed'));
+      r.readAsDataURL(file);
+    });
+
+    const resp = await fetch('/api/upload-library', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ filename:file.name, content:b64 })
+    });
+    const data = await resp.json();
+    if (!data.success) throw new Error(data.error);
+
+    const name   = file.name.replace(/\.zip$/i,'');
+    const header = name + '.h';
+    addLib({ name, header, tag:'Custom' });
+    st.style.color = 'var(--green)';
+    st.textContent = `✓ ${file.name} uploaded & added`;
+  } catch(e){
+    st.style.color = 'var(--red)';
+    st.textContent = '✗ ' + e.message;
+  }
+  input.value = '';
+}
+
+function addCustomInclude(){
+  let val = document.getElementById('custom-include').value.trim();
+  if (!val) return;
+  let header = val.replace(/^#include\s*/i,'').replace(/[<>"]/g,'').trim();
+  if (!header.endsWith('.h')) header += '.h';
+  const name = header.replace(/\.h$/,'');
+  addLib({ name, header, tag:'Custom' });
+  document.getElementById('custom-include').value = '';
+  document.getElementById('import-status').textContent = `Added #include <${header}>`;
+  document.getElementById('import-status').style.color = 'var(--green)';
+}
+
+// Drag and drop on drop zone
+document.addEventListener('DOMContentLoaded',()=>{
+  const dz = document.getElementById('drop-zone');
+  dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.classList.add('over'); });
+  dz.addEventListener('dragleave',()=> dz.classList.remove('over'));
+  dz.addEventListener('drop', e=>{
+    e.preventDefault(); dz.classList.remove('over');
+    const f = e.dataTransfer.files[0];
+    if (f?.name.endsWith('.zip')) importZip({files:[f]});
+  });
+});
+
+// Restore installed libs includes on load
+window.addEventListener('load',()=>{
+  installedLibs.forEach(lib=>{
+    const line = `#include <${lib.header}>`;
+    if (editor && !editor.getValue().includes(line)) injectInclude(lib.header);
+  });
+});
+</script>
 </body>
 </html>
