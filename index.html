@@ -518,6 +518,7 @@ function runLightDiagnostics(){
   const markers = [];
   const stack = [];
   let blockComment = false;
+  let braceDepth = 0;
 
   lines.forEach((raw, idx)=>{
     const lineNo = idx + 1;
@@ -525,6 +526,7 @@ function runLightDiagnostics(){
     let code = '';
     let quote = null;
     let stringStart = 0;
+    const depthBeforeLine = braceDepth;
 
     for (let i = 0; i < line.length; i++){
       const ch = line[i], next = line[i + 1];
@@ -568,6 +570,13 @@ function runLightDiagnostics(){
     }
 
     const trimmed = stripLineComment(raw).trim();
+    const codeTrimmed = code.trim();
+    if (/^[A-Za-z_]\w*;?$/.test(codeTrimmed)){
+      const message = depthBeforeLine === 0
+        ? `Unexpected identifier '${codeTrimmed.replace(/;$/,'')}' at global scope. Did you forget a type, declaration, or comment marker?`
+        : `Standalone identifier '${codeTrimmed.replace(/;$/,'')}'. Did you forget a semicolon, assignment, or function call?`;
+      markers.push(marker(lineNo, raw.indexOf(codeTrimmed.replace(/;$/,'')) + 1, message, Severity.Error));
+    }
     if (/^#\s*include\b/.test(trimmed) && !/^#\s*include\s*(<[^>]+>|"[^"]+")/.test(trimmed)){
       markers.push(marker(lineNo, raw.indexOf('include') + 1, 'Expected #include <Header.h> or #include "Header.h"', Severity.Warning));
     }
@@ -579,6 +588,7 @@ function runLightDiagnostics(){
       const ch = code[i];
       if ('({['.includes(ch)){
         stack.push({ ch, line:lineNo, col:i + 1 });
+        if (ch === '{') braceDepth++;
       } else if (')}]'.includes(ch)){
         const expected = ch === ')' ? '(' : ch === '}' ? '{' : '[';
         const top = stack[stack.length - 1];
@@ -586,6 +596,7 @@ function runLightDiagnostics(){
           markers.push(marker(lineNo, i + 1, `Unexpected '${ch}'`, Severity.Error));
         } else {
           stack.pop();
+          if (ch === '}') braceDepth = Math.max(0, braceDepth - 1);
         }
       }
     }
