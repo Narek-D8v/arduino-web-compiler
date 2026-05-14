@@ -4,11 +4,10 @@ Browser-based Arduino IDE with remote compilation through Vercel Serverless Func
 
 The app lets you write Arduino / ESP32 sketches in the browser, attach extra project files, compile them in GitHub Actions, and flash the generated firmware from the web UI.
 
-https://arduino-web-compiler.vercel.app/
-
 ## Features
 
 - Monaco code editor with Arduino snippets and autocomplete.
+- Lightweight pre-compile diagnostics for common syntax mistakes.
 - Board selector for Arduino Uno, Nano, Mega, ESP32, ESP32-S3, and ESP32-C3.
 - Remote compile using `arduino-cli` inside GitHub Actions.
 - Extra project files like `.h`, `.hpp`, `.cpp`, `.c`, `.ino`, `.txt`, and `.json`.
@@ -244,6 +243,22 @@ For `.cpp` files, include Arduino types manually:
 ```
 
 The workflow intentionally ignores `Arduino.h` during library installation because it is provided by the selected Arduino core.
+
+## Editor Diagnostics
+
+The editor uses Monaco markers to show lightweight diagnostics before compilation.
+
+It can catch common issues such as:
+
+- unclosed brackets, braces, and parentheses;
+- unexpected closing brackets;
+- unclosed string or character literals;
+- malformed `#include` lines;
+- `#include` lines ending with `;`;
+- missing `void setup()` or `void loop()` in `sketch.ino`;
+- common Arduino typos like `Serial.Begin`, `serial`, `pinmode`, and `digitalwrite`.
+
+This is intentionally not a full C++ compiler or `clangd` language server. The final source of truth is still the GitHub Actions compile step.
 
 ## Libraries
 
