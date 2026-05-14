@@ -63,7 +63,8 @@ module.exports = async (req, res) => {
         const username = 'Narek-D8v';
         const repo = 'arduino-web-compiler';
 
-        const requestPath = `.compile-requests/request-${Date.now()}-${Math.random().toString(36).slice(2)}.json`;
+        const requestId = `build-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const requestPath = `.compile-requests/${requestId}.json`;
         const requestBody = JSON.stringify({
             code,
             files: cleanFiles
@@ -110,6 +111,7 @@ module.exports = async (req, res) => {
                 body: JSON.stringify({
                     event_type: 'compile_cmd',
                     client_payload: {
+                        request_id: requestId,
                         project_path: requestPath,
                         board:     board || 'uno',
                         fqbn:      fqbn || '',
@@ -126,6 +128,7 @@ module.exports = async (req, res) => {
                 success: true, 
                 message: 'Compilation triggered successfully',
                 repository: `${username}/${repo}`,
+                request_id: requestId,
                 timestamp: new Date().toISOString()
             });
         } else {
