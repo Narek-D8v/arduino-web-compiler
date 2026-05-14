@@ -74,6 +74,22 @@ esp-web-install-button [slot=activate]{
 }
 esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(33,150,243,.3)}
 
+/* Build progress */
+#build-progress{display:none}
+#build-progress.open{display:block}
+#build-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+#build-state{font-size:12px;font-family:var(--mono);color:var(--muted)}
+#build-link{font-size:11px;color:var(--blue);text-decoration:none}
+#build-steps{display:flex;flex-direction:column;gap:5px}
+.build-step{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);min-height:18px}
+.build-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+.build-step.done{color:var(--text)}
+.build-step.done .build-dot{background:var(--green)}
+.build-step.run{color:var(--blue)}
+.build-step.run .build-dot{background:var(--blue);box-shadow:0 0 10px rgba(33,150,243,.45)}
+.build-step.fail{color:var(--red)}
+.build-step.fail .build-dot{background:var(--red)}
+
 /* Serial Monitor */
 #serial-wrap{flex:1;display:flex;flex-direction:column;min-height:0;padding:14px}
 #serial-out{flex:1;min-height:0;overflow-y:auto;background:var(--bg0);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--mono);font-size:12px;line-height:1.6}
@@ -201,6 +217,16 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
       <div id="flash-note" style="margin-top:10px;font-size:11px;color:var(--muted)">Compile first, then flash. The button fetches the latest firmware automatically.</div>
     </div>
 
+    <!-- Build Progress -->
+    <div class="pane" id="build-progress">
+      <div id="build-head">
+        <div class="pane-title" style="margin-bottom:0">Build Progress</div>
+        <a id="build-link" href="#" target="_blank" rel="noopener" style="display:none">Open Actions</a>
+      </div>
+      <div id="build-state">Idle</div>
+      <div id="build-steps" style="margin-top:10px"></div>
+    </div>
+
     <!-- Serial Monitor -->
     <div id="serial-wrap">
       <div class="pane-title">Serial Monitor</div>
@@ -280,6 +306,7 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
 // ────────────────────────────────────────────────────────────────────────────
 const BUILDS  = 'https://raw.githubusercontent.com/Narek-D8v/arduino-web-compiler/builds';
 const API     = '/api/compile';
+const STATUS_API = '/api/status';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Monaco Editor
@@ -546,6 +573,96 @@ function setStatus(msg, type){
   el.className = type;
 }
 
+let buildPollTimer = null;
+let lastBuildStepKey = '';
+
+function buildStepClass(step){
+  if (step.conclusion === 'failure' || step.conclusion === 'cancelled' || step.conclusion === 'timed_out') return 'fail';
+  if (step.status === 'completed') return 'done';
+  if (step.status === 'in_progress') return 'run';
+  return '';
+}
+
+function buildStepLabel(step){
+  if (step.conclusion) return `${step.name} - ${step.conclusion}`;
+  if (step.status) return `${step.name} - ${step.status.replace('_',' ')}`;
+  return step.name;
+}
+
+function renderBuildProgress(data){
+  const box = document.getElementById('build-progress');
+  const state = document.getElementById('build-state');
+  const steps = document.getElementById('build-steps');
+  const link = document.getElementById('build-link');
+  box.classList.add('open');
+
+  if (!data.found){
+    state.textContent = data.message || 'Waiting for GitHub Actions...';
+    steps.innerHTML = '<div class="build-step run"><span class="build-dot"></span><span>Waiting for workflow run</span></div>';
+    link.style.display = 'none';
+    return;
+  }
+
+  const conclusion = data.conclusion ? ` / ${data.conclusion}` : '';
+  state.textContent = `Run #${data.run_id}: ${data.status}${conclusion}`;
+  if (data.html_url){
+    link.href = data.html_url;
+    link.style.display = '';
+  }
+
+  const allSteps = (data.jobs || []).flatMap(job => job.steps || []);
+  steps.innerHTML = '';
+  allSteps.forEach(step=>{
+    const row = document.createElement('div');
+    row.className = 'build-step ' + buildStepClass(step);
+    row.innerHTML = '<span class="build-dot"></span>';
+    const text = document.createElement('span');
+    text.textContent = buildStepLabel(step);
+    row.appendChild(text);
+    steps.appendChild(row);
+  });
+
+  const stepKey = allSteps.map(step=>`${step.name}:${step.status}:${step.conclusion || ''}`).join('|');
+  if (stepKey && stepKey !== lastBuildStepKey){
+    lastBuildStepKey = stepKey;
+    const current = [...allSteps].reverse().find(step=>step.status === 'in_progress') ||
+      [...allSteps].reverse().find(step=>step.status === 'completed');
+    if (current) serialLog(`Build: ${buildStepLabel(current)}`, 'sys');
+  }
+}
+
+async function pollBuildStatus(requestId){
+  clearInterval(buildPollTimer);
+  lastBuildStepKey = '';
+
+  const tick = async ()=>{
+    try {
+      const res = await fetch(`${STATUS_API}?request_id=${encodeURIComponent(requestId)}`);
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Status failed');
+      renderBuildProgress(data);
+
+      if (data.found && data.status === 'completed'){
+        clearInterval(buildPollTimer);
+        if (data.conclusion === 'success'){
+          setStatus('✓ Build complete', 'ok');
+          serialLog('Build complete — firmware URLs refreshed', 'sys');
+          refreshFlashUrls();
+        } else {
+          setStatus('✗ Build ' + (data.conclusion || 'failed'), 'err');
+          serialLog('Build failed — open Actions for logs', 'sys');
+        }
+      }
+    } catch(e){
+      document.getElementById('build-progress').classList.add('open');
+      document.getElementById('build-state').textContent = 'Status error: ' + e.message;
+    }
+  };
+
+  await tick();
+  buildPollTimer = setInterval(tick, 4000);
+}
+
 async function compile(){
   syncActiveFile();
   const { board, fqbn } = boardInfo();
@@ -575,6 +692,7 @@ async function compile(){
 
     setStatus('✓ Build triggered', 'ok');
     serialLog('Build triggered — waiting for GitHub Actions…','sys');
+    if (data.request_id) pollBuildStatus(data.request_id);
 
     // After a delay, refresh flash button URLs
     setTimeout(()=> refreshFlashUrls(), 5000);
