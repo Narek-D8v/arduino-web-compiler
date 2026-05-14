@@ -63,6 +63,39 @@ module.exports = async (req, res) => {
         const username = 'Narek-D8v';
         const repo = 'arduino-web-compiler';
 
+        const requestPath = `.compile-requests/request-${Date.now()}-${Math.random().toString(36).slice(2)}.json`;
+        const requestBody = JSON.stringify({
+            code,
+            files: cleanFiles
+        });
+
+        const uploadResponse = await fetch(
+            `https://api.github.com/repos/${username}/${repo}/contents/${requestPath}`,
+            {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `token ${githubToken}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Arduino-Web-Compiler'
+                },
+                body: JSON.stringify({
+                    message: `Compile request: ${timestamp || new Date().toISOString()}`,
+                    content: Buffer.from(requestBody, 'utf8').toString('base64'),
+                    branch: 'main'
+                })
+            }
+        );
+
+        if (uploadResponse.status !== 200 && uploadResponse.status !== 201) {
+            const uploadError = await uploadResponse.text();
+            return res.status(uploadResponse.status).json({
+                success: false,
+                error: `GitHub upload error: ${uploadResponse.status}`,
+                details: uploadError
+            });
+        }
+
         // Отправляем repository_dispatch запрос в GitHub
         const response = await fetch(
             `https://api.github.com/repos/${username}/${repo}/dispatches`,
@@ -77,8 +110,7 @@ module.exports = async (req, res) => {
                 body: JSON.stringify({
                     event_type: 'compile_cmd',
                     client_payload: {
-                        code:      code,
-                        files:     cleanFiles,
+                        project_path: requestPath,
                         board:     board || 'uno',
                         fqbn:      fqbn || '',
                         timestamp: timestamp || new Date().toISOString(),
