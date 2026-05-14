@@ -4,6 +4,8 @@ Browser-based Arduino IDE with remote compilation through Vercel Serverless Func
 
 The app lets you write Arduino / ESP32 sketches in the browser, attach extra project files, compile them in GitHub Actions, and flash the generated firmware from the web UI.
 
+https://arduino-web-compiler.vercel.app/
+
 ## Features
 
 - Monaco code editor with Arduino snippets and autocomplete.
