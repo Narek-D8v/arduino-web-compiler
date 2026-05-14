@@ -40,22 +40,20 @@ jobs:
           ARDUINO_LIBS_DIR="$HOME/Arduino/libraries"
           mkdir -p "$ARDUINO_LIBS_DIR"
 
-          # Кастомные ZIP-библиотеки из /libraries/
           if [ -d "libraries" ]; then
             for ZIP_PATH in libraries/*.zip; do
               [ -f "$ZIP_PATH" ] || continue
-              echo "📦 Installing ZIP: $ZIP_PATH"
-              arduino-cli lib install --zip-path "$ZIP_PATH" || echo "⚠ Failed: $ZIP_PATH"
+              echo "Installing ZIP: $ZIP_PATH"
+              arduino-cli lib install --zip-path "$ZIP_PATH" || echo "Failed: $ZIP_PATH"
             done
             for LIB_PATH in libraries/*/; do
               [ -d "$LIB_PATH" ] || continue
               LIB_NAME=$(basename "$LIB_PATH")
-              echo "📂 Copying: $LIB_NAME"
+              echo "Copying: $LIB_NAME"
               cp -r "$LIB_PATH" "$ARDUINO_LIBS_DIR/$LIB_NAME"
             done
           fi
 
-          # Известные библиотеки из Arduino Library Manager
           declare -A LIB_MAP=(
             ["Servo.h"]="Servo"
             ["Wire.h"]="Wire"
@@ -112,32 +110,34 @@ jobs:
 
             HEADER_NAME="${HEADER%.h}"
             if [ -d "$ARDUINO_LIBS_DIR/$HEADER_NAME" ]; then
-              echo "Already installed (custom): $HEADER"
+              echo "Already installed custom library: $HEADER"
               continue
             fi
 
             if [[ -n "${LIB_MAP[$HEADER]+_}" ]]; then
-              echo "📥 Installing: ${LIB_MAP[$HEADER]}"
-              arduino-cli lib install "${LIB_MAP[$HEADER]}" || echo "⚠ Could not install ${LIB_MAP[$HEADER]}"
+              echo "Installing: ${LIB_MAP[$HEADER]}"
+              arduino-cli lib install "${LIB_MAP[$HEADER]}" || echo "Could not install ${LIB_MAP[$HEADER]}"
             else
               GUESS="${HEADER%.h}"
-              echo "❓ Trying by name: $GUESS"
-              arduino-cli lib install "$GUESS" || echo "⚠ Not found: $GUESS"
+              echo "Trying library by name: $GUESS"
+              arduino-cli lib install "$GUESS" || echo "Not found: $GUESS"
             fi
           done
 
       - name: Compile
         run: |
           BOARD="${{ github.event.client_payload.board }}"
+          PAYLOAD_FQBN="${{ github.event.client_payload.fqbn }}"
+
           if [[ "$BOARD" == esp32* ]]; then
-            FQBN="esp32:esp32:esp32"
+            FQBN="${PAYLOAD_FQBN:-esp32:esp32:esp32}"
           else
-            FQBN="arduino:avr:uno"
+            FQBN="${PAYLOAD_FQBN:-arduino:avr:uno}"
           fi
 
-          echo "🔨 Compiling for $FQBN..."
+          echo "Compiling for $FQBN..."
           arduino-cli compile --fqbn "$FQBN" --output-dir ./out --export-binaries build_sketch
-          echo "✓ Compilation successful"
+          echo "Compilation successful"
           echo "=== Output files ==="
           ls -la out/
 
@@ -150,7 +150,7 @@ jobs:
           git fetch origin builds || true
           git checkout -B builds
 
-          rm -f firmware.hex firmware.bin bootloader.bin partitions.bin boot_app0.bin
+          rm -f firmware.hex firmware.bin merged-firmware.bin bootloader.bin partitions.bin boot_app0.bin manifest.json
 
           BOARD="${{ github.event.client_payload.board }}"
 
@@ -158,53 +158,97 @@ jobs:
             echo "=== ESP32 build artifacts ==="
             ls -la out/
 
-            echo "=== Searching for ESP32 system files ==="
-            find ~/.arduino15/packages/esp32 -name "*.bin" | sort
+            cp out/build_sketch.ino.bin firmware.bin && echo "firmware.bin"
 
-            # Основной бинарник
-            cp out/build_sketch.ino.bin firmware.bin && echo "✓ firmware.bin"
+            MERGED_BIN=$(find out/ -name "*.merged.bin" | head -1)
+            if [ -n "$MERGED_BIN" ]; then
+              cp "$MERGED_BIN" merged-firmware.bin && echo "merged-firmware.bin"
+            fi
 
-            # Bootloader — для ESP32 (40MHz crystal, DIO mode)
             BOOTLOADER=$(find ~/.arduino15/packages/esp32 -path "*/boot_image/bootloader_dio_40m.bin" | head -1)
             if [ -z "$BOOTLOADER" ]; then
               BOOTLOADER=$(find ~/.arduino15/packages/esp32 -name "bootloader_dio_40m.bin" | head -1)
             fi
-            echo "Bootloader path: $BOOTLOADER"
-            [ -n "$BOOTLOADER" ] && cp "$BOOTLOADER" bootloader.bin && echo "✓ bootloader.bin"
+            [ -n "$BOOTLOADER" ] && cp "$BOOTLOADER" bootloader.bin && echo "bootloader.bin"
 
-            # Partition table — default 4MB
             PARTITIONS=$(find ~/.arduino15/packages/esp32 -path "*/partitions/default.bin" | head -1)
             if [ -z "$PARTITIONS" ]; then
               PARTITIONS=$(find ~/.arduino15/packages/esp32 -name "default.bin" | head -1)
             fi
-            echo "Partitions path: $PARTITIONS"
-            [ -n "$PARTITIONS" ] && cp "$PARTITIONS" partitions.bin && echo "✓ partitions.bin"
+            [ -n "$PARTITIONS" ] && cp "$PARTITIONS" partitions.bin && echo "partitions.bin"
 
-            # boot_app0.bin
             BOOT_APP=$(find ~/.arduino15/packages/esp32 -name "boot_app0.bin" | head -1)
-            echo "boot_app0 path: $BOOT_APP"
-            [ -n "$BOOT_APP" ] && cp "$BOOT_APP" boot_app0.bin && echo "✓ boot_app0.bin"
+            [ -n "$BOOT_APP" ] && cp "$BOOT_APP" boot_app0.bin && echo "boot_app0.bin"
 
-            # Если не нашли системные файлы — берём из out/ (arduino-cli кладёт их туда тоже)
             if [ ! -f bootloader.bin ]; then
               BOOT_OUT=$(find out/ -name "*bootloader*" | head -1)
-              [ -n "$BOOT_OUT" ] && cp "$BOOT_OUT" bootloader.bin && echo "✓ bootloader.bin (from out/)"
+              [ -n "$BOOT_OUT" ] && cp "$BOOT_OUT" bootloader.bin && echo "bootloader.bin from out"
             fi
             if [ ! -f partitions.bin ]; then
               PART_OUT=$(find out/ -name "*partition*" | head -1)
-              [ -n "$PART_OUT" ] && cp "$PART_OUT" partitions.bin && echo "✓ partitions.bin (from out/)"
+              [ -n "$PART_OUT" ] && cp "$PART_OUT" partitions.bin && echo "partitions.bin from out"
+            fi
+
+            CHIP_FAMILY="ESP32"
+            BOOTLOADER_OFFSET="4096"
+            case "$BOARD" in
+              esp32-s3*)
+                CHIP_FAMILY="ESP32-S3"
+                BOOTLOADER_OFFSET="0"
+                ;;
+              esp32-c3*)
+                CHIP_FAMILY="ESP32-C3"
+                BOOTLOADER_OFFSET="0"
+                ;;
+            esac
+
+            if [ -f merged-firmware.bin ]; then
+              cat > manifest.json <<EOF
+          {
+            "name": "Arduino Web Compiler",
+            "version": "${{ github.event.client_payload.timestamp }}",
+            "builds": [
+              {
+                "chipFamily": "$CHIP_FAMILY",
+                "parts": [
+                  { "path": "merged-firmware.bin", "offset": 0 }
+                ]
+              }
+            ]
+          }
+          EOF
+            else
+              cat > manifest.json <<EOF
+          {
+            "name": "Arduino Web Compiler",
+            "version": "${{ github.event.client_payload.timestamp }}",
+            "builds": [
+              {
+                "chipFamily": "$CHIP_FAMILY",
+                "parts": [
+                  { "path": "bootloader.bin", "offset": $BOOTLOADER_OFFSET },
+                  { "path": "partitions.bin", "offset": 32768 },
+                  { "path": "boot_app0.bin", "offset": 57344 },
+                  { "path": "firmware.bin", "offset": 65536 }
+                ]
+              }
+            ]
+          }
+          EOF
             fi
 
             echo "=== Final artifacts ==="
-            ls -la *.bin 2>/dev/null || echo "No .bin files found!"
+            ls -la *.bin manifest.json 2>/dev/null || true
+            cat manifest.json
 
-            [ -f firmware.bin   ] && git add firmware.bin
+            [ -f firmware.bin ] && git add firmware.bin
+            [ -f merged-firmware.bin ] && git add merged-firmware.bin
             [ -f bootloader.bin ] && git add bootloader.bin
             [ -f partitions.bin ] && git add partitions.bin
-            [ -f boot_app0.bin  ] && git add boot_app0.bin
-
+            [ -f boot_app0.bin ] && git add boot_app0.bin
+            [ -f manifest.json ] && git add manifest.json
           else
-            cp out/build_sketch.ino.hex firmware.hex && echo "✓ firmware.hex"
+            cp out/build_sketch.ino.hex firmware.hex && echo "firmware.hex"
             [ -f firmware.hex ] && git add firmware.hex
           fi
 
@@ -212,4 +256,4 @@ jobs:
 
           git commit -m "Build: ${{ github.event.client_payload.board }} @ ${{ github.event.client_payload.timestamp }}"
           git push origin builds --force
-          echo "✓ Artifacts pushed to builds branch"
+          echo "Artifacts pushed to builds branch"
