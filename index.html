@@ -568,7 +568,10 @@ async function compile(){
     });
     const data = await res.json();
 
-    if (!data.success) throw new Error(data.error);
+    if (!data.success) {
+      const detail = data.details ? `: ${String(data.details).slice(0, 500)}` : '';
+      throw new Error(data.error + detail);
+    }
 
     setStatus('✓ Build triggered', 'ok');
     serialLog('Build triggered — waiting for GitHub Actions…','sys');
