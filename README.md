@@ -3,7 +3,6 @@
 Browser-based Arduino IDE with remote compilation through Vercel Serverless Functions and GitHub Actions.
 
 The app lets you write Arduino / ESP32 sketches in the browser, attach extra project files, compile them in GitHub Actions, and flash the generated firmware from the web UI.
-https://arduino-web-compiler.vercel.app/
 
 ## Features
 
@@ -13,6 +12,7 @@ https://arduino-web-compiler.vercel.app/
 - Extra project files like `.h`, `.hpp`, `.cpp`, `.c`, `.ino`, `.txt`, and `.json`.
 - Library manager with common Arduino libraries.
 - ZIP library upload through the Vercel API.
+- Live GitHub Actions build progress in the web UI.
 - AVR flashing through `arduino-web-uploader`.
 - ESP32 flashing through `esp-web-tools`.
 - Serial Monitor using Web Serial API.
@@ -41,6 +41,16 @@ builds branch
   | raw.githubusercontent.com/.../builds
   v
 Web flasher
+
+Browser
+  |
+  | GET /api/status?request_id=...
+  v
+Vercel Serverless Function
+  |
+  | reads GitHub Actions run + job steps
+  v
+Build Progress panel
 ```
 
 ## Repository Layout
@@ -50,6 +60,7 @@ Web flasher
 ├── index.html                  # Main web app
 ├── api/
 │   ├── compile.js              # Vercel API for triggering compile
+│   ├── status.js               # Vercel API for reading Actions progress
 │   └── upload-library.js       # Vercel API for uploading ZIP libraries
 ├── .github/workflows/
 │   └── compile.yml             # Arduino / ESP32 compile workflow
@@ -138,7 +149,7 @@ When the user clicks `Compile`:
 1. The browser sends the main sketch and attached files to `/api/compile`.
 2. `api/compile.js` sanitizes file names.
 3. The API writes a temporary `.compile-requests/request-*.json` file to the repository.
-4. The API triggers GitHub Actions with `repository_dispatch`.
+4. The API triggers GitHub Actions with `repository_dispatch` and returns `request_id`.
 5. `.github/workflows/compile.yml` reads the temporary project file.
 6. The workflow writes:
 
@@ -152,6 +163,14 @@ build_sketch/*.cpp
 7. `arduino-cli compile` builds the project.
 8. The output firmware is pushed to the `builds` branch.
 9. The workflow removes the temporary compile request file.
+
+The browser polls:
+
+```text
+/api/status?request_id=<request_id>
+```
+
+and displays the GitHub Actions run status, job steps, result, and an `Open Actions` link.
 
 ## Attached Project Files
 
