@@ -4,6 +4,9 @@ on:
   repository_dispatch:
     types: [compile_cmd]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -26,16 +29,9 @@ jobs:
           arduino-cli core update-index --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
           arduino-cli core install esp32:esp32 --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
 
-      - name: Write Sketch
-        run: |
-          mkdir -p build_sketch
-          cat << 'ARDUINO_SKETCH_END' > build_sketch/build_sketch.ino
-          ${{ github.event.client_payload.code }}
-          ARDUINO_SKETCH_END
-
-      - name: Write Project Files
+      - name: Write Project
         env:
-          PROJECT_FILES_JSON: ${{ toJson(github.event.client_payload.files) }}
+          PROJECT_REQUEST_PATH: ${{ github.event.client_payload.project_path }}
         run: |
           python3 <<'PY'
           import json
@@ -43,17 +39,28 @@ jobs:
           import re
           from pathlib import Path
 
-          raw = os.environ.get("PROJECT_FILES_JSON") or "[]"
-          try:
-              files = json.loads(raw)
-          except json.JSONDecodeError:
-              files = []
-          if not isinstance(files, list):
-              files = []
+          request_path = os.environ.get("PROJECT_REQUEST_PATH", "")
+          if not request_path.startswith(".compile-requests/"):
+              raise SystemExit(f"Invalid project request path: {request_path}")
 
+          request_file = Path(request_path)
+          if not request_file.is_file():
+              raise SystemExit(f"Project request file not found: {request_path}")
+
+          data = json.loads(request_file.read_text(encoding="utf-8"))
           out_dir = Path("build_sketch")
           out_dir.mkdir(exist_ok=True)
           allowed_exts = {".h", ".hpp", ".hh", ".c", ".cpp", ".cc", ".ino", ".txt", ".json"}
+
+          code = str(data.get("code", ""))
+          if not code.strip():
+              raise SystemExit("Project request has no sketch code")
+          (out_dir / "build_sketch.ino").write_text(code, encoding="utf-8", newline="\n")
+          print("Wrote project file: build_sketch.ino")
+
+          files = data.get("files", [])
+          if not isinstance(files, list):
+              files = []
 
           for item in files[:20]:
               name = str(item.get("name", ""))
@@ -291,3 +298,26 @@ jobs:
           git commit -m "Build: ${{ github.event.client_payload.board }} @ ${{ github.event.client_payload.timestamp }}"
           git push origin builds --force
           echo "Artifacts pushed to builds branch"
+
+      - name: Cleanup Compile Request
+        if: always()
+        run: |
+          REQUEST_PATH="${{ github.event.client_payload.project_path }}"
+          if [ -z "$REQUEST_PATH" ]; then
+            exit 0
+          fi
+          case "$REQUEST_PATH" in
+            .compile-requests/*) ;;
+            *) echo "Skip invalid request path: $REQUEST_PATH"; exit 0 ;;
+          esac
+
+          git fetch origin main
+          git checkout main
+          if [ ! -f "$REQUEST_PATH" ]; then
+            echo "Request file already removed"
+            exit 0
+          fi
+
+          git rm "$REQUEST_PATH"
+          git commit -m "Cleanup compile request"
+          git push origin main
