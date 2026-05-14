@@ -166,6 +166,7 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
   </select>
 
   <div class="tb-sep"></div>
+  <button class="tb-btn ghost" onclick="checkSyntax()" id="check-btn">Check</button>
   <button class="tb-btn green" onclick="compile()" id="compile-btn">▶ Compile</button>
   <button class="tb-btn ghost" onclick="openLibs()">📦 Libraries</button>
   <div id="tb-status" class="hidden"></div>
@@ -503,12 +504,12 @@ function marker(line, col, message, severity){
 }
 
 function runLightDiagnostics(){
-  if (!editor || !window.monaco) return;
+  if (!editor || !window.monaco) return [];
   const file = currentFile();
   const model = editor.getModel();
   if (!file || !model || !isCodeFile(file.name)){
     monaco.editor.setModelMarkers(model, 'arduino-lite', []);
-    return;
+    return [];
   }
 
   const Severity = monaco.MarkerSeverity;
@@ -617,11 +618,35 @@ function runLightDiagnostics(){
   }
 
   monaco.editor.setModelMarkers(model, 'arduino-lite', markers);
+  return markers;
 }
 
 function scheduleDiagnostics(){
   clearTimeout(diagnosticsTimer);
   diagnosticsTimer = setTimeout(runLightDiagnostics, 180);
+}
+
+function checkSyntax(){
+  syncActiveFile();
+  clearTimeout(diagnosticsTimer);
+  const markers = runLightDiagnostics();
+  const Severity = monaco.MarkerSeverity;
+  const errors = markers.filter(m=>m.severity === Severity.Error);
+  const warnings = markers.filter(m=>m.severity === Severity.Warning);
+
+  if (!markers.length){
+    setStatus('✓ Check OK', 'ok');
+    serialLog(`Check OK: ${currentFile().name}`, 'sys');
+    return true;
+  }
+
+  const summary = `${errors.length} error(s), ${warnings.length} warning(s)`;
+  setStatus((errors.length ? '✗ ' : '⚠ ') + summary, errors.length ? 'err' : 'run');
+  serialLog(`Check ${currentFile().name}: ${summary}`, 'sys');
+  markers.slice(0, 5).forEach(m=>{
+    serialLog(`Line ${m.startLineNumber}: ${m.message}`, errors.includes(m) ? 'sys' : 'tx');
+  });
+  return errors.length === 0;
 }
 
 require.config({ paths:{ vs:'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' }});
@@ -694,6 +719,7 @@ require(['vs/editor/editor.main'], ()=>{
   runLightDiagnostics();
 
   // Shortcut: Ctrl+Enter = compile
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter, checkSyntax);
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, compile);
 });
 
