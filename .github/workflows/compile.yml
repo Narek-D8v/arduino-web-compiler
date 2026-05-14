@@ -1,4 +1,5 @@
 name: Arduino & ESP32 Remote Compile
+run-name: Compile ${{ github.event.client_payload.request_id || github.event.client_payload.board }}
 
 on:
   repository_dispatch:
