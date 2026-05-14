@@ -27,7 +27,7 @@ module.exports = async (req, res) => {
 
     try {
         // Получаем поля из тела запроса
-        const { code, board, timestamp } = req.body;
+        const { code, board, fqbn, timestamp } = req.body;
 
         if (!code) {
             return res.status(400).json({ 
@@ -66,6 +66,7 @@ module.exports = async (req, res) => {
                     client_payload: {
                         code:      code,
                         board:     board || 'uno',
+                        fqbn:      fqbn || '',
                         timestamp: timestamp || new Date().toISOString(),
                         source:    'web-interface'
                     }
