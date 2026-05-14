@@ -248,6 +248,8 @@ The workflow intentionally ignores `Arduino.h` during library installation becau
 
 The editor uses Monaco markers to show lightweight diagnostics before compilation.
 
+Diagnostics run while you type and can also be triggered manually with the `Check` button in the toolbar.
+
 It can catch common issues such as:
 
 - unclosed brackets, braces, and parentheses;
