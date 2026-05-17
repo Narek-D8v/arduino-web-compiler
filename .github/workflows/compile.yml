@@ -74,6 +74,25 @@ jobs:
               content = str(item.get("content", ""))[:120000]
               (out_dir / name).write_text(content, encoding="utf-8", newline="\n")
               print(f"Wrote project file: {name}")
+
+          event_path = os.environ.get("GITHUB_EVENT_PATH", "")
+          payload = {}
+          if event_path and Path(event_path).is_file():
+              payload = json.loads(Path(event_path).read_text(encoding="utf-8")).get("client_payload", {})
+
+          secrets = payload.get("secrets", {})
+          if isinstance(secrets, dict) and (secrets.get("WIFI_SSID") or secrets.get("WIFI_PASS")):
+              def c_string(value):
+                  return str(value or "")[:512].replace("\\", "\\\\").replace('"', '\\"').replace("\r", "\\r").replace("\n", "\\n")
+
+              secrets_header = "\n".join([
+                  "#pragma once",
+                  f"#define SECRET_SSID \"{c_string(secrets.get('WIFI_SSID'))}\"",
+                  f"#define SECRET_PASS \"{c_string(secrets.get('WIFI_PASS'))}\"",
+                  ""
+              ])
+              (out_dir / "secrets.h").write_text(secrets_header, encoding="utf-8", newline="\n")
+              print("Wrote generated project file: secrets.h")
           PY
 
       - name: Install Libraries
