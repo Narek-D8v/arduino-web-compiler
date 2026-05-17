@@ -65,6 +65,16 @@ select.tb-sel:focus{outline:none;border-color:var(--blue)}
 #flash-avr-btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,230,118,.3)}
 #flash-avr-btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
 #flash-avr-btn .upload-progress{font-weight:400;font-size:12px;margin-left:6px;opacity:.8}
+#download-hex-btn{
+  display:block;width:100%;margin-top:8px;padding:8px;border-radius:8px;border:1px solid var(--border);
+  background:var(--bg3);color:var(--text);font-weight:700;font-size:13px;cursor:pointer;transition:.15s;
+}
+#download-esp-btn{
+  display:block;width:100%;margin-top:8px;padding:8px;border-radius:8px;border:1px solid var(--border);
+  background:var(--bg3);color:var(--text);font-weight:700;font-size:13px;cursor:pointer;transition:.15s;
+}
+#download-hex-btn:hover,#download-esp-btn:hover{border-color:var(--green);color:var(--green)}
+#download-hex-btn:disabled,#download-esp-btn:disabled{opacity:.4;cursor:not-allowed}
 
 esp-web-install-button{display:block;width:100%}
 esp-web-install-button [slot=activate]{
@@ -199,6 +209,7 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
           hex-href=""
           board="uno"
         >⚡ Flash Arduino<span class="upload-progress"></span></button>
+        <button id="download-hex-btn" type="button" onclick="downloadHex()">⬇ Download HEX</button>
         <div style="margin-top:6px;font-size:11px;color:var(--muted);text-align:center">
           Powered by <a href="https://github.com/dbuezas/arduino-web-uploader" target="_blank" style="color:var(--blue)">arduino-web-uploader</a>
         </div>
@@ -210,6 +221,7 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
           <button slot="activate">⚡ Flash ESP32</button>
           <span slot="unsupported" style="color:var(--red);font-size:12px">Web Serial not supported — use Chrome/Edge</span>
         </esp-web-install-button>
+        <button id="download-esp-btn" type="button" onclick="downloadEspBins()">⬇ Download ESP32 BINs</button>
         <div style="margin-top:6px;font-size:11px;color:var(--muted);text-align:center">
           Powered by <a href="https://esphome.github.io/esp-web-tools/" target="_blank" style="color:var(--blue)">esp-web-tools</a>
         </div>
@@ -776,6 +788,9 @@ function onBoardChange(){
 // ────────────────────────────────────────────────────────────────────────────
 // Compile
 // ────────────────────────────────────────────────────────────────────────────
+let latestHexUrl = '';
+let latestManifestUrl = '';
+
 function setStatus(msg, type){
   const el = document.getElementById('tb-status');
   el.textContent = msg;
@@ -918,10 +933,92 @@ async function compile(){
 function refreshFlashUrls(){
   const { board } = boardInfo();
   const t = Date.now();
+  latestHexUrl = `${BUILDS}/firmware.hex?t=${t}`;
+  latestManifestUrl = `${BUILDS}/manifest.json?t=${t}`;
   if (isESP(board)){
-    document.getElementById('esp-btn').setAttribute('manifest', `${BUILDS}/manifest.json?t=${t}`);
+    document.getElementById('esp-btn').setAttribute('manifest', latestManifestUrl);
   } else {
-    document.getElementById('flash-avr-btn').setAttribute('hex-href', `${BUILDS}/firmware.hex?t=${t}`);
+    document.getElementById('flash-avr-btn').setAttribute('hex-href', latestHexUrl);
+  }
+}
+
+async function downloadHex(){
+  const btn = document.getElementById('download-hex-btn');
+  const url = latestHexUrl || `${BUILDS}/firmware.hex?t=${Date.now()}`;
+  try {
+    btn.disabled = true;
+    btn.textContent = 'Downloading...';
+    const res = await fetch(url, { cache:'no-store' });
+    if (!res.ok) throw new Error(`HEX not found (${res.status})`);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    const objectUrl = URL.createObjectURL(blob);
+    const { board } = boardInfo();
+    a.href = objectUrl;
+    a.download = `${board}-firmware.hex`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
+    serialLog('HEX downloaded', 'sys');
+  } catch(e){
+    setStatus('✗ ' + e.message, 'err');
+    serialLog('Download error: ' + e.message, 'sys');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⬇ Download HEX';
+  }
+}
+
+function artifactUrl(path){
+  return `${BUILDS}/${encodeURIComponent(path)}?t=${Date.now()}`;
+}
+
+function offsetName(offset){
+  const n = Number(offset || 0);
+  return '0x' + n.toString(16).toUpperCase();
+}
+
+async function downloadFile(url, filename){
+  const res = await fetch(url, { cache:'no-store' });
+  if (!res.ok) throw new Error(`${filename} not found (${res.status})`);
+  const blob = await res.blob();
+  const a = document.createElement('a');
+  const objectUrl = URL.createObjectURL(blob);
+  a.href = objectUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+async function downloadEspBins(){
+  const btn = document.getElementById('download-esp-btn');
+  const manifestUrl = latestManifestUrl || `${BUILDS}/manifest.json?t=${Date.now()}`;
+  try {
+    btn.disabled = true;
+    btn.textContent = 'Downloading...';
+    const res = await fetch(manifestUrl, { cache:'no-store' });
+    if (!res.ok) throw new Error(`Manifest not found (${res.status})`);
+    const manifest = await res.json();
+    const build = manifest.builds?.[0];
+    const parts = build?.parts || [];
+    if (!parts.length) throw new Error('Manifest has no firmware parts');
+
+    await downloadFile(artifactUrl('manifest.json'), 'manifest.json');
+    for (const part of parts){
+      const name = `${offsetName(part.offset)}-${part.path}`;
+      await downloadFile(artifactUrl(part.path), name);
+    }
+
+    serialLog(`ESP32 BINs downloaded: ${parts.map(p=>p.path).join(', ')}`, 'sys');
+  } catch(e){
+    setStatus('✗ ' + e.message, 'err');
+    serialLog('Download error: ' + e.message, 'sys');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⬇ Download ESP32 BINs';
   }
 }
 
