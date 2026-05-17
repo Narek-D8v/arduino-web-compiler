@@ -1006,7 +1006,6 @@ async function downloadEspBins(){
     const parts = build?.parts || [];
     if (!parts.length) throw new Error('Manifest has no firmware parts');
 
-    await downloadFile(artifactUrl('manifest.json'), 'manifest.json');
     for (const part of parts){
       const name = `${offsetName(part.offset)}-${part.path}`;
       await downloadFile(artifactUrl(part.path), name);
