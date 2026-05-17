@@ -27,7 +27,7 @@ module.exports = async (req, res) => {
 
     try {
         // Получаем поля из тела запроса
-        const { code, files, board, fqbn, timestamp } = req.body;
+        const { code, files, secrets, board, fqbn, timestamp } = req.body;
 
         if (!code) {
             return res.status(400).json({ 
@@ -48,6 +48,14 @@ module.exports = async (req, res) => {
                 content: String(file.content || '').slice(0, 120000)
             })).filter(file => file.name)
             : [];
+
+        const cleanSecrets = secrets && typeof secrets === 'object' ? {
+            WIFI_SSID: String(secrets.WIFI_SSID || '').slice(0, 512),
+            WIFI_PASS: String(secrets.WIFI_PASS || '').slice(0, 512)
+        } : null;
+        const dispatchSecrets = cleanSecrets && (cleanSecrets.WIFI_SSID || cleanSecrets.WIFI_PASS)
+            ? cleanSecrets
+            : undefined;
 
         // Проверяем наличие токена в переменных окружения
         const githubToken = process.env.MY_GITHUB_TOKEN;
@@ -116,7 +124,8 @@ module.exports = async (req, res) => {
                         board:     board || 'uno',
                         fqbn:      fqbn || '',
                         timestamp: timestamp || new Date().toISOString(),
-                        source:    'web-interface'
+                        source:    'web-interface',
+                        secrets:   dispatchSecrets
                     }
                 })
             }
