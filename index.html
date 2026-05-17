@@ -76,6 +76,16 @@ select.tb-sel:focus{outline:none;border-color:var(--blue)}
 #download-hex-btn:hover,#download-esp-btn:hover{border-color:var(--green);color:var(--green)}
 #download-hex-btn:disabled,#download-esp-btn:disabled{opacity:.4;cursor:not-allowed}
 
+/* Secrets */
+.secret-grid{display:grid;gap:8px}
+.secret-input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-family:var(--mono);font-size:12px}
+.secret-input:focus{outline:none;border-color:var(--blue)}
+.secret-row{display:flex;gap:6px}
+.secret-row .secret-input{min-width:0}
+.secret-action{padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap}
+.secret-action:hover{border-color:var(--green);color:var(--green)}
+.secret-note{font-size:11px;color:var(--muted);line-height:1.4}
+
 esp-web-install-button{display:block;width:100%}
 esp-web-install-button [slot=activate]{
   display:block;width:100%;padding:10px;border-radius:8px;border:none;
@@ -178,7 +188,15 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
   <div class="tb-sep"></div>
   <button class="tb-btn ghost" onclick="checkSyntax()" id="check-btn">Check</button>
   <button class="tb-btn green" onclick="compile()" id="compile-btn">▶ Compile</button>
+  <select class="tb-sel" id="example-sel" onchange="loadExample(this.value)">
+    <option value="">Examples</option>
+    <option value="blink">Blink</option>
+    <option value="wifi-scan">Wi-Fi Scanner</option>
+    <option value="web-server">ESP32 Web Server</option>
+    <option value="ble-beacon">BLE Beacon</option>
+  </select>
   <button class="tb-btn ghost" onclick="openLibs()">📦 Libraries</button>
+  <button class="tb-btn ghost" onclick="shareProject()">Share</button>
   <div id="tb-status" class="hidden"></div>
 </div>
 
@@ -228,6 +246,19 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
       </div>
 
       <div id="flash-note" style="margin-top:10px;font-size:11px;color:var(--muted)">Compile first, then flash. The button fetches the latest firmware automatically.</div>
+    </div>
+
+    <!-- Secrets -->
+    <div class="pane">
+      <div class="pane-title">Secrets</div>
+      <div class="secret-grid">
+        <input id="secret-ssid" class="secret-input" placeholder="WIFI_SSID">
+        <div class="secret-row">
+          <input id="secret-pass" class="secret-input" type="password" placeholder="WIFI_PASS">
+          <button class="secret-action" type="button" onclick="insertSecretsInclude()">Include</button>
+        </div>
+        <div class="secret-note">Build creates secrets.h. Use #include "secrets.h" in your sketch.</div>
+      </div>
     </div>
 
     <!-- Build Progress -->
@@ -740,6 +771,7 @@ require(['vs/editor/editor.main'], ()=>{
     scheduleDiagnostics();
   });
   runLightDiagnostics();
+  restoreSharedProject();
 
   // Shortcut: Ctrl+Enter = compile
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter, checkSyntax);
@@ -762,6 +794,304 @@ void loop() {
 
 projectFiles = loadProjectFiles();
 activeFile = projectFiles[0].name;
+
+const EXAMPLES = {
+  blink: {
+    board:'uno|arduino:avr:uno',
+    files:[{
+      name:'sketch.ino',
+      content:`// Blink
+void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
+}
+
+void loop() {
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(1000);
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(1000);
+}`
+    }]
+  },
+  'wifi-scan': {
+    board:'esp32|esp32:esp32:esp32doit-devkit-v1',
+    files:[{
+      name:'sketch.ino',
+      content:`#include <WiFi.h>
+
+void setup() {
+  Serial.begin(115200);
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+  delay(100);
+  Serial.println("Wi-Fi scan started");
+}
+
+void loop() {
+  int count = WiFi.scanNetworks();
+  Serial.printf("Found %d network(s)\\n", count);
+
+  for (int i = 0; i < count; i++) {
+    Serial.printf("%2d: %s (%d dBm)%s\\n",
+      i + 1,
+      WiFi.SSID(i).c_str(),
+      WiFi.RSSI(i),
+      WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? " open" : "");
+  }
+
+  WiFi.scanDelete();
+  delay(5000);
+}`
+    }]
+  },
+  'web-server': {
+    board:'esp32|esp32:esp32:esp32doit-devkit-v1',
+    files:[{
+      name:'sketch.ino',
+      content:`#include <WiFi.h>
+#include <WebServer.h>
+#include "secrets.h"
+#include "index.h"
+
+WebServer server(80);
+
+void handleRoot() {
+  server.send(200, "text/html", INDEX_HTML);
+}
+
+void setup() {
+  Serial.begin(115200);
+  WiFi.begin(SECRET_SSID, SECRET_PASS);
+  Serial.print("Connecting");
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println();
+  Serial.print("Open http://");
+  Serial.println(WiFi.localIP());
+
+  server.on("/", handleRoot);
+  server.begin();
+}
+
+void loop() {
+  server.handleClient();
+}`
+    },{
+      name:'index.h',
+      content:`#pragma once
+
+const char INDEX_HTML[] PROGMEM = R"HTML(
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ESP32 Web Server</title>
+  <style>
+    body{font-family:Arial,sans-serif;margin:40px;background:#101820;color:#f4f7fb}
+    .box{max-width:520px}
+    h1{color:#00e676}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>ESP32 is online</h1>
+    <p>This page is served from your board.</p>
+  </div>
+</body>
+</html>
+)HTML";`
+    }]
+  },
+  'ble-beacon': {
+    board:'esp32|esp32:esp32:esp32doit-devkit-v1',
+    files:[{
+      name:'sketch.ino',
+      content:`#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEBeacon.h>
+#include <BLEAdvertising.h>
+
+void setup() {
+  Serial.begin(115200);
+  BLEDevice::init("ESP32 Beacon");
+
+  BLEBeacon beacon;
+  beacon.setManufacturerId(0x4C00);
+  beacon.setProximityUUID(BLEUUID("12345678-1234-1234-1234-123456789abc"));
+  beacon.setMajor(1);
+  beacon.setMinor(1);
+  beacon.setSignalPower(-59);
+
+  BLEAdvertisementData data;
+  data.setFlags(0x04);
+  data.setManufacturerData(beacon.getData());
+
+  BLEAdvertising *advertising = BLEDevice::getAdvertising();
+  advertising->setAdvertisementData(data);
+  advertising->start();
+
+  Serial.println("BLE beacon advertising");
+}
+
+void loop() {
+  delay(1000);
+}`
+    }]
+  }
+};
+
+function applyProject(files, nextActive='sketch.ino'){
+  const seen = new Set();
+  projectFiles = files.map(file=>{
+    const safe = sanitizeFileName(file.name) || 'file.h';
+    const dot = safe.lastIndexOf('.');
+    const base = dot > 0 ? safe.slice(0,dot) : safe;
+    const ext = dot > 0 ? safe.slice(dot) : '';
+    let name = safe;
+    let i = 2;
+    while (seen.has(name)){
+      name = `${base}_${i}${ext}`;
+      i++;
+    }
+    seen.add(name);
+    return { name, content: String(file.content || '') };
+  });
+  activeFile = projectFiles.some(f=>f.name === nextActive) ? nextActive : projectFiles[0].name;
+  if (editor){
+    const file = currentFile();
+    editor.setValue(file.content);
+    monaco.editor.setModelLanguage(editor.getModel(), fileLanguage(file.name));
+    renderFileTabs();
+    saveProjectFiles();
+    scheduleDiagnostics();
+  }
+}
+
+function loadExample(key){
+  const select = document.getElementById('example-sel');
+  if (!key) return;
+  const example = EXAMPLES[key];
+  if (!example) return;
+  syncActiveFile();
+  const ok = !projectFiles.some(f=>f.content.trim()) || confirm('Replace current project with this example?');
+  select.value = '';
+  if (!ok) return;
+  document.getElementById('board-sel').value = example.board;
+  onBoardChange();
+  applyProject(example.files);
+  setStatus('✓ Example loaded', 'ok');
+  serialLog('Example loaded', 'sys');
+}
+
+function bytesToBase64Url(bytes){
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000){
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function base64UrlToBytes(value){
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function gzipText(text){
+  if (!window.CompressionStream) throw new Error('CompressionStream is not supported in this browser');
+  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function gunzipText(bytes){
+  if (!window.DecompressionStream) throw new Error('DecompressionStream is not supported in this browser');
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return await new Response(stream).text();
+}
+
+async function shareProject(){
+  try {
+    syncActiveFile();
+    const payload = JSON.stringify({
+      version:1,
+      board:document.getElementById('board-sel').value,
+      files:projectFiles
+    });
+    const encoded = bytesToBase64Url(await gzipText(payload));
+    const url = `${location.origin}${location.pathname}${location.search}#project=${encoded}`;
+    history.replaceState(null, '', url);
+    await navigator.clipboard?.writeText(url);
+    setStatus('✓ Share URL copied', 'ok');
+    serialLog('Share URL copied to clipboard', 'sys');
+  } catch(e){
+    setStatus('✗ Share failed', 'err');
+    serialLog('Share error: ' + e.message, 'sys');
+  }
+}
+
+async function restoreSharedProject(){
+  const match = location.hash.match(/(?:^#|&)project=([^&]+)/);
+  if (!match) return;
+  try {
+    const text = await gunzipText(base64UrlToBytes(decodeURIComponent(match[1])));
+    const data = JSON.parse(text);
+    const files = Array.isArray(data.files) ? data.files : [];
+    const cleaned = files.map(file=>({
+      name: sanitizeFileName(file.name),
+      content: String(file.content || '')
+    })).filter(file=>file.name);
+    if (!cleaned.length) throw new Error('Shared project has no files');
+    if (typeof data.board === 'string' && Array.from(document.getElementById('board-sel').options).some(option=>option.value === data.board)){
+      document.getElementById('board-sel').value = data.board;
+      onBoardChange();
+    }
+    applyProject(cleaned);
+    setStatus('✓ Shared project loaded', 'ok');
+    serialLog('Shared project loaded from URL', 'sys');
+  } catch(e){
+    setStatus('✗ Share load failed', 'err');
+    serialLog('Share load error: ' + e.message, 'sys');
+  }
+}
+
+function getSecrets(){
+  return {
+    WIFI_SSID: document.getElementById('secret-ssid')?.value || '',
+    WIFI_PASS: document.getElementById('secret-pass')?.value || ''
+  };
+}
+
+function saveSecrets(){
+  localStorage.setItem('compileSecrets', JSON.stringify(getSecrets()));
+}
+
+function loadSecrets(){
+  try {
+    const saved = JSON.parse(localStorage.getItem('compileSecrets') || '{}');
+    document.getElementById('secret-ssid').value = saved.WIFI_SSID || '';
+    document.getElementById('secret-pass').value = saved.WIFI_PASS || '';
+  } catch(_){}
+}
+
+function insertSecretsInclude(){
+  if (!editor) return;
+  syncActiveFile();
+  const line = '#include "secrets.h"';
+  const lines = editor.getValue().split('\n');
+  if (!lines.some(l=>l.trim() === line)){
+    let last = -1;
+    lines.forEach((l,i)=>{ if(l.trim().startsWith('#include')) last=i; });
+    lines.splice(last + 1, 0, line);
+    editor.setValue(lines.join('\n'));
+  }
+  setStatus('✓ secrets.h included', 'ok');
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Board selector
@@ -905,7 +1235,7 @@ async function compile(){
     const res  = await fetch(API, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ code, files, board, fqbn, timestamp: new Date().toISOString() })
+      body: JSON.stringify({ code, files, secrets:getSecrets(), board, fqbn, timestamp: new Date().toISOString() })
     });
     const data = await res.json();
 
@@ -1103,6 +1433,9 @@ async function serialSend(){
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
+  loadSecrets();
+  document.getElementById('secret-ssid').addEventListener('input', saveSecrets);
+  document.getElementById('secret-pass').addEventListener('input', saveSecrets);
   document.getElementById('serial-input').addEventListener('keydown', e=>{
     if (e.key === 'Enter') serialSend();
   });
