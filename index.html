@@ -34,9 +34,6 @@ select.tb-sel:focus{outline:none;border-color:var(--blue)}
 .tb-btn.ghost:hover:not(:disabled){border-color:var(--muted)}
 .tb-toggle{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 9px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer}
 .tb-toggle input{accent-color:var(--green)}
-.tb-scale{display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 9px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:12px;font-weight:600;white-space:nowrap}
-.tb-scale input{width:88px;accent-color:var(--green)}
-.tb-scale span{font-family:var(--mono);font-size:11px;color:var(--muted);min-width:34px;text-align:right}
 #tb-status{font-size:12px;font-family:var(--mono);padding:4px 10px;border-radius:4px;margin-left:4px}
 #tb-status.ok{background:rgba(0,230,118,.12);color:var(--green);border:1px solid rgba(0,230,118,.2)}
 #tb-status.err{background:rgba(244,67,54,.12);color:var(--red);border:1px solid rgba(244,67,54,.2)}
@@ -264,7 +261,6 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
     <option value="hc-black">High Contrast</option>
   </select>
   <label class="tb-toggle"><input type="checkbox" id="minimap-toggle" onchange="setMinimap(this.checked)"> Minimap</label>
-  <label class="tb-scale">Scale <input type="range" id="ui-scale" min="75" max="115" step="5" value="100" oninput="setUiScale(this.value)"><span id="ui-scale-value">100%</span></label>
   <div id="tb-status" class="hidden"></div>
 </div>
 
@@ -1182,19 +1178,6 @@ function setMinimap(enabled){
   if (editor) editor.updateOptions({ minimap:{ enabled:on } });
 }
 
-function setUiScale(value){
-  const n = Math.min(115, Math.max(75, Number(value) || 100));
-  const scale = n / 100;
-  localStorage.setItem('uiScale', String(n));
-  document.body.style.zoom = String(scale);
-  document.documentElement.style.setProperty('--panel-width', n <= 85 ? '300px' : '340px');
-  const input = document.getElementById('ui-scale');
-  const label = document.getElementById('ui-scale-value');
-  if (input) input.value = String(n);
-  if (label) label.textContent = `${n}%`;
-  if (editor) requestAnimationFrame(()=>editor.layout());
-}
-
 function loadExample(key){
   const select = document.getElementById('example-sel');
   if (!key) return;
@@ -1286,9 +1269,9 @@ async function restoreSharedProject(){
 
 async function exportProjectZip(){
   try {
-    if (!window.JSZip) throw new Error('JSZip is not loaded yet');
+    const JSZipCtor = await ensureJSZip();
     syncActiveFile();
-    const zip = new JSZip();
+    const zip = new JSZipCtor();
     projectFiles.forEach(file=> zip.file(file.name, file.content));
     zip.file('project.json', JSON.stringify({
       version:1,
@@ -1308,8 +1291,8 @@ async function exportProjectZip(){
 async function importProjectZip(file){
   if (!file) return;
   try {
-    if (!window.JSZip) throw new Error('JSZip is not loaded yet');
-    const zip = await JSZip.loadAsync(file);
+    const JSZipCtor = await ensureJSZip();
+    const zip = await JSZipCtor.loadAsync(file);
     const loaded = [];
     let board = '';
     for (const entry of Object.values(zip.files)){
@@ -1351,6 +1334,29 @@ function downloadBlob(blob, filename){
   a.click();
   a.remove();
   URL.revokeObjectURL(objectUrl);
+}
+
+let jsZipLoadPromise = null;
+
+function ensureJSZip(){
+  if (window.JSZip) return Promise.resolve(window.JSZip);
+  if (jsZipLoadPromise) return jsZipLoadPromise;
+  jsZipLoadPromise = new Promise((resolve, reject)=>{
+    const existing = [...document.scripts].find(script=>script.src.includes('jszip'));
+    const script = existing || document.createElement('script');
+    const done = ()=> window.JSZip ? resolve(window.JSZip) : reject(new Error('JSZip failed to load'));
+    script.addEventListener('load', done, { once:true });
+    script.addEventListener('error', ()=> reject(new Error('JSZip CDN is unavailable')), { once:true });
+    if (!existing){
+      script.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+      document.head.appendChild(script);
+    }
+    setTimeout(done, 1500);
+  }).catch(error=>{
+    jsZipLoadPromise = null;
+    throw error;
+  });
+  return jsZipLoadPromise;
 }
 
 function setupProjectDropZone(){
@@ -1487,9 +1493,9 @@ function renderFsFiles(){
 
 async function exportFsZip(){
   try {
-    if (!window.JSZip) throw new Error('JSZip is not loaded yet');
+    const JSZipCtor = await ensureJSZip();
     if (!fsFiles.length) throw new Error('Add FS files first');
-    const zip = new JSZip();
+    const zip = new JSZipCtor();
     for (const item of fsFiles){
       zip.file(item.name.replace(/^\/+/, ''), await item.file.arrayBuffer());
     }
@@ -2180,7 +2186,6 @@ function addSerialMacro(){
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
-  setUiScale(localStorage.getItem('uiScale') || '100');
   loadSecrets();
   setupProjectDropZone();
   updatePartitionEditor();
