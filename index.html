@@ -30,6 +30,8 @@ select.tb-sel:focus{outline:none;border-color:var(--blue)}
 .tb-btn.blue:hover:not(:disabled){box-shadow:0 0 14px rgba(33,150,243,.35)}
 .tb-btn.ghost{background:var(--bg3);color:var(--text);border:1px solid var(--border)}
 .tb-btn.ghost:hover:not(:disabled){border-color:var(--muted)}
+.tb-toggle{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 9px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer}
+.tb-toggle input{accent-color:var(--green)}
 #tb-status{font-size:12px;font-family:var(--mono);padding:4px 10px;border-radius:4px;margin-left:4px}
 #tb-status.ok{background:rgba(0,230,118,.12);color:var(--green);border:1px solid rgba(0,230,118,.2)}
 #tb-status.err{background:rgba(244,67,54,.12);color:var(--red);border:1px solid rgba(244,67,54,.2)}
@@ -49,6 +51,7 @@ select.tb-sel:focus{outline:none;border-color:var(--blue)}
 .file-action{height:24px;padding:0 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg3);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
 .file-action:hover{border-color:var(--blue)}
 #editor{flex:1;min-height:0}
+#editor-wrap.drag-over{outline:2px dashed var(--blue);outline-offset:-8px;background:rgba(33,150,243,.06)}
 
 /* ── Right Panel ── */
 #panel{display:flex;flex-direction:column;border-left:1px solid var(--border);background:var(--bg1);overflow:hidden}
@@ -85,6 +88,47 @@ select.tb-sel:focus{outline:none;border-color:var(--blue)}
 .secret-action{padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap}
 .secret-action:hover{border-color:var(--green);color:var(--green)}
 .secret-note{font-size:11px;color:var(--muted);line-height:1.4}
+
+/* Partition editor */
+.partition-grid{display:grid;gap:9px}
+.partition-row{display:grid;grid-template-columns:62px 1fr 64px;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.partition-row strong{color:var(--text);font-size:12px}
+.partition-row input[type=range]{width:100%;accent-color:var(--green)}
+.partition-value{font-family:var(--mono);font-size:11px;text-align:right;color:var(--text)}
+.partition-bar{display:flex;height:14px;overflow:hidden;border:1px solid var(--border);border-radius:5px;background:var(--bg0)}
+.partition-bar span{display:block;min-width:2px}
+.partition-nvs{background:#00e676}
+.partition-ota{background:#2196f3}
+.partition-app{background:#ffcc02}
+.partition-fs{background:#ff9800}
+.partition-csv{width:100%;min-height:92px;resize:vertical;background:var(--bg0);border:1px solid var(--border);border-radius:6px;padding:7px;color:var(--text);font-family:var(--mono);font-size:11px;line-height:1.35}
+.partition-actions{display:flex;gap:6px}
+.partition-actions .secret-action{flex:1}
+.tool-grid{display:grid;gap:8px}
+.tool-row{display:flex;gap:6px;align-items:center}
+.tool-row input,.tool-row select{min-width:0;flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-family:var(--mono);font-size:12px}
+.tool-row input:focus,.tool-row select:focus{outline:none;border-color:var(--blue)}
+.mini-btn{padding:7px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap}
+.mini-btn:hover{border-color:var(--blue);color:var(--blue)}
+.mini-btn.danger:hover{border-color:var(--red);color:var(--red)}
+.mini-btn:disabled,.tool-row input:disabled{opacity:.45;cursor:not-allowed}
+.tool-status{display:none;border:1px solid var(--border);border-radius:6px;background:var(--bg0);padding:8px;font-size:11px;line-height:1.35;color:var(--muted)}
+.tool-status.open{display:flex;align-items:flex-start;gap:8px}
+.tool-status.err{border-color:rgba(244,67,54,.35);color:var(--red)}
+.spin{width:13px;height:13px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;flex:none;animation:spin .8s linear infinite}
+.tool-status.err .spin{display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hint-line{font-size:11px;color:var(--muted);line-height:1.35}
+.hint-line button{border:none;background:transparent;color:var(--blue);font-size:11px;font-weight:700;cursor:pointer;padding:0}
+.fs-list,.macro-list{display:flex;flex-wrap:wrap;gap:6px}
+.fs-chip,.macro-chip{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);font-family:var(--mono);font-size:11px;color:var(--text)}
+.fs-chip button,.macro-chip button{border:none;background:transparent;color:var(--muted);cursor:pointer}
+.fs-chip button:hover,.macro-chip button:hover{color:var(--red)}
+.pinout-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.pin-btn{display:flex;justify-content:space-between;gap:6px;padding:7px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:11px;cursor:pointer;text-align:left}
+.pin-btn:hover{border-color:var(--green)}
+.pin-btn b{font-family:var(--mono);color:var(--green)}
+.pin-btn span{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 esp-web-install-button{display:block;width:100%}
 esp-web-install-button [slot=activate]{
@@ -187,6 +231,7 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
 
   <div class="tb-sep"></div>
   <button class="tb-btn ghost" onclick="checkSyntax()" id="check-btn">Check</button>
+  <button class="tb-btn ghost" onclick="applyQuickFixes()">Quick Fix</button>
   <button class="tb-btn green" onclick="compile()" id="compile-btn">▶ Compile</button>
   <select class="tb-sel" id="example-sel" onchange="loadExample(this.value)">
     <option value="">Examples</option>
@@ -197,6 +242,16 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
   </select>
   <button class="tb-btn ghost" onclick="openLibs()">📦 Libraries</button>
   <button class="tb-btn ghost" onclick="shareProject()">Share</button>
+  <button class="tb-btn ghost" onclick="togglePinout()">Pinout</button>
+  <button class="tb-btn ghost" onclick="exportProjectZip()">ZIP</button>
+  <button class="tb-btn ghost" onclick="document.getElementById('project-zip-input').click()">Import ZIP</button>
+  <input type="file" id="project-zip-input" accept=".zip" style="display:none" onchange="importProjectZip(this.files[0]); this.value=''">
+  <select class="tb-sel" id="theme-sel" onchange="setEditorTheme(this.value)">
+    <option value="ard">Dark</option>
+    <option value="vs">Light</option>
+    <option value="hc-black">High Contrast</option>
+  </select>
+  <label class="tb-toggle"><input type="checkbox" id="minimap-toggle" onchange="setMinimap(this.checked)"> Minimap</label>
   <div id="tb-status" class="hidden"></div>
 </div>
 
@@ -261,6 +316,68 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
       </div>
     </div>
 
+    <!-- ESP32 Partition Editor -->
+    <div class="pane" id="partition-pane">
+      <div class="pane-title">ESP32 Partition Table</div>
+      <div class="partition-grid">
+        <div class="partition-row">
+          <strong>App</strong>
+          <input id="partition-app" type="range" min="1024" max="3072" step="64" value="1792" oninput="updatePartitionEditor()">
+          <span class="partition-value" id="partition-app-label">1792 KB</span>
+        </div>
+        <div class="partition-row">
+          <strong>FS</strong>
+          <input id="partition-fs" type="range" min="256" max="2048" step="64" value="1024" oninput="updatePartitionEditor()">
+          <span class="partition-value" id="partition-fs-label">1024 KB</span>
+        </div>
+        <div class="partition-bar" title="NVS, OTA data, App, LittleFS/SPIFFS">
+          <span class="partition-nvs" id="partition-bar-nvs"></span>
+          <span class="partition-ota" id="partition-bar-ota"></span>
+          <span class="partition-app" id="partition-bar-app"></span>
+          <span class="partition-fs" id="partition-bar-fs"></span>
+        </div>
+        <textarea class="partition-csv" id="partition-csv" readonly></textarea>
+        <div class="partition-actions">
+          <button class="secret-action" type="button" onclick="applyPartitionCsv()">Create partitions.csv</button>
+          <button class="secret-action" type="button" onclick="downloadPartitionCsv()">Download CSV</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ESP32 FS / OTA Tools -->
+    <div class="pane" id="esp-tools-pane">
+      <div class="pane-title">ESP32 Tools</div>
+      <div class="tool-grid">
+        <div class="tool-status" id="esp-tool-status"><span class="spin"></span><span id="esp-tool-status-text"></span></div>
+        <button class="mini-btn danger esp-tool-control" type="button" onclick="eraseEspFlash()">Erase Flash</button>
+        <div class="tool-row">
+          <input id="fs-file-input" type="file" multiple style="display:none" onchange="addFsFiles(this.files); this.value=''">
+          <button class="mini-btn esp-tool-control" type="button" onclick="document.getElementById('fs-file-input').click()">Add FS files</button>
+          <button class="mini-btn esp-tool-control" type="button" onclick="exportFsZip()">FS ZIP</button>
+        </div>
+        <div class="fs-list" id="fs-list"></div>
+        <div class="tool-row">
+          <input id="fs-image-input" type="file" accept=".bin" style="display:none" onchange="setFsImageFile(this.files[0]); this.value=''">
+          <button class="mini-btn esp-tool-control" type="button" onclick="document.getElementById('fs-image-input').click()">Select FS .bin</button>
+          <input id="fs-offset" class="esp-tool-control" value="0x1D0000" title="Flash offset for filesystem image">
+        </div>
+        <div class="hint-line" id="fs-offset-hint"></div>
+        <button class="mini-btn esp-tool-control" type="button" onclick="flashFsImage()">Flash FS image</button>
+        <div class="tool-row">
+          <input id="ota-url" class="esp-tool-control" placeholder="http://192.168.1.50/update">
+          <input id="ota-file-input" type="file" accept=".bin" style="display:none" onchange="setOtaFile(this.files[0]); this.value=''">
+          <button class="mini-btn esp-tool-control" type="button" onclick="document.getElementById('ota-file-input').click()">BIN</button>
+        </div>
+        <button class="mini-btn esp-tool-control" type="button" onclick="uploadOta()">Upload OTA</button>
+      </div>
+    </div>
+
+    <!-- Pinout -->
+    <div class="pane" id="pinout-pane" style="display:none">
+      <div class="pane-title">Pinout</div>
+      <div class="pinout-grid" id="pinout-grid"></div>
+    </div>
+
     <!-- Build Progress -->
     <div class="pane" id="build-progress">
       <div id="build-head">
@@ -288,6 +405,12 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
         <input id="serial-input" placeholder="Send…" disabled>
         <button id="serial-send" onclick="serialSend()" disabled>↩</button>
       </div>
+      <div class="tool-row" style="margin-top:8px">
+        <input id="macro-name" placeholder="Name">
+        <input id="macro-command" placeholder="Command">
+        <button class="mini-btn" type="button" onclick="addSerialMacro()">Add</button>
+      </div>
+      <div class="macro-list" id="macro-list" style="margin-top:8px"></div>
     </div>
   </div>
 </div>
@@ -342,6 +465,7 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
 
 <!-- Scripts -->
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://github.com/dbuezas/arduino-web-uploader/releases/download/v1.1.2/main.js"></script>
 
 <script>
@@ -703,6 +827,39 @@ function checkSyntax(){
   return errors.length === 0;
 }
 
+function quickFixText(text){
+  const replacements = [
+    [/\bSerial\.Begin\b/g, 'Serial.begin'],
+    [/\bserial\./g, 'Serial.'],
+    [/\bdigitalwrite\b/g, 'digitalWrite'],
+    [/\banalogwrite\b/g, 'analogWrite'],
+    [/\bpinmode\b/g, 'pinMode'],
+    [/\bDelay\b/g, 'delay'],
+    [/\boutput\b/g, 'OUTPUT'],
+    [/\binput_pullup\b/g, 'INPUT_PULLUP'],
+    [/\binput\b/g, 'INPUT'],
+    [/\bhigh\b/g, 'HIGH'],
+    [/\blow\b/g, 'LOW']
+  ];
+  return replacements.reduce((value, [from, to])=> value.replace(from, to), text);
+}
+
+function applyQuickFixes(){
+  if (!editor) return;
+  const before = editor.getValue();
+  const after = quickFixText(before);
+  if (before === after){
+    setStatus('No quick fixes', 'run');
+    return;
+  }
+  editor.setValue(after);
+  syncActiveFile();
+  saveProjectFiles();
+  scheduleDiagnostics();
+  setStatus('✓ Quick fixes applied', 'ok');
+  serialLog('Quick fixes applied to current file', 'sys');
+}
+
 require.config({ paths:{ vs:'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' }});
 require(['vs/editor/editor.main'], ()=>{
   // Arduino autocomplete
@@ -742,9 +899,33 @@ require(['vs/editor/editor.main'], ()=>{
     fontSize:14,
     fontFamily:"'JetBrains Mono', monospace",
     automaticLayout:true,
-    minimap:{enabled:false},
+    minimap:{enabled:localStorage.getItem('editorMinimap') === '1'},
     scrollBeyondLastLine:false,
     quickSuggestions:true,
+  });
+
+  monaco.languages.registerCodeActionProvider('cpp', {
+    provideCodeActions(model, range){
+      const lineNo = range.startLineNumber;
+      const line = model.getLineContent(lineNo);
+      const fixed = quickFixText(line);
+      if (fixed === line) return { actions:[], dispose(){} };
+      return {
+        actions:[{
+          title:'Apply Arduino quick fix',
+          kind:'quickfix',
+          edit:{ edits:[{
+            resource:model.uri,
+            edit:{
+              range:new monaco.Range(lineNo, 1, lineNo, line.length + 1),
+              text:fixed
+            }
+          }]},
+          isPreferred:true
+        }],
+        dispose(){}
+      };
+    }
   });
 
   // Custom dark theme
@@ -762,7 +943,8 @@ require(['vs/editor/editor.main'], ()=>{
       'editor.selectionBackground':'#00e67630',
     }
   });
-  monaco.editor.setTheme('ard');
+  setEditorTheme(localStorage.getItem('editorTheme') || 'ard');
+  setMinimap(localStorage.getItem('editorMinimap') === '1');
 
   renderFileTabs();
   editor.onDidChangeModelContent(()=>{
@@ -971,6 +1153,22 @@ function applyProject(files, nextActive='sketch.ino'){
   }
 }
 
+function setEditorTheme(theme){
+  const value = ['ard','vs','hc-black'].includes(theme) ? theme : 'ard';
+  localStorage.setItem('editorTheme', value);
+  const select = document.getElementById('theme-sel');
+  if (select) select.value = value;
+  if (window.monaco) monaco.editor.setTheme(value);
+}
+
+function setMinimap(enabled){
+  const on = Boolean(enabled);
+  localStorage.setItem('editorMinimap', on ? '1' : '0');
+  const toggle = document.getElementById('minimap-toggle');
+  if (toggle) toggle.checked = on;
+  if (editor) editor.updateOptions({ minimap:{ enabled:on } });
+}
+
 function loadExample(key){
   const select = document.getElementById('example-sel');
   if (!key) return;
@@ -1060,6 +1258,383 @@ async function restoreSharedProject(){
   }
 }
 
+async function exportProjectZip(){
+  try {
+    if (!window.JSZip) throw new Error('JSZip is not loaded yet');
+    syncActiveFile();
+    const zip = new JSZip();
+    projectFiles.forEach(file=> zip.file(file.name, file.content));
+    zip.file('project.json', JSON.stringify({
+      version:1,
+      board:document.getElementById('board-sel').value,
+      exportedAt:new Date().toISOString()
+    }, null, 2));
+    const blob = await zip.generateAsync({ type:'blob' });
+    downloadBlob(blob, 'arduino-project.zip');
+    setStatus('✓ ZIP exported', 'ok');
+    serialLog('Project ZIP exported', 'sys');
+  } catch(e){
+    setStatus('✗ ZIP export failed', 'err');
+    serialLog('ZIP export error: ' + e.message, 'sys');
+  }
+}
+
+async function importProjectZip(file){
+  if (!file) return;
+  try {
+    if (!window.JSZip) throw new Error('JSZip is not loaded yet');
+    const zip = await JSZip.loadAsync(file);
+    const loaded = [];
+    let board = '';
+    for (const entry of Object.values(zip.files)){
+      if (entry.dir) continue;
+      const cleanName = sanitizeFileName(entry.name);
+      if (!cleanName) continue;
+      if (cleanName === 'project.json'){
+        try {
+          const meta = JSON.parse(await entry.async('string'));
+          board = typeof meta.board === 'string' ? meta.board : '';
+        } catch(_){}
+        continue;
+      }
+      if (!/\.(ino|cpp|c|h|hpp|hh|cc|txt|json|csv)$/i.test(cleanName)) continue;
+      loaded.push({ name:cleanName, content:await entry.async('string') });
+    }
+    if (!loaded.length) throw new Error('ZIP has no Arduino project files');
+    if (board && Array.from(document.getElementById('board-sel').options).some(option=>option.value === board)){
+      document.getElementById('board-sel').value = board;
+      onBoardChange();
+    }
+    const ok = !projectFiles.some(f=>f.content.trim()) || confirm(`Replace current project with ${loaded.length} file(s) from ZIP?`);
+    if (!ok) return;
+    applyProject(loaded);
+    setStatus('✓ ZIP imported', 'ok');
+    serialLog(`Project ZIP imported: ${loaded.length} file(s)`, 'sys');
+  } catch(e){
+    setStatus('✗ ZIP import failed', 'err');
+    serialLog('ZIP import error: ' + e.message, 'sys');
+  }
+}
+
+function downloadBlob(blob, filename){
+  const a = document.createElement('a');
+  const objectUrl = URL.createObjectURL(blob);
+  a.href = objectUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+function setupProjectDropZone(){
+  const wrap = document.getElementById('editor-wrap');
+  if (!wrap) return;
+  wrap.addEventListener('dragover', e=>{
+    if (e.dataTransfer.items && ![...e.dataTransfer.items].some(item=>item.kind === 'file')) return;
+    e.preventDefault();
+    wrap.classList.add('drag-over');
+  });
+  wrap.addEventListener('dragleave', ()=> wrap.classList.remove('drag-over'));
+  wrap.addEventListener('drop', e=>{
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    e.preventDefault();
+    wrap.classList.remove('drag-over');
+    if (/\.zip$/i.test(file.name)) importProjectZip(file);
+  });
+}
+
+let esptoolModulePromise = null;
+let fsFiles = [];
+let fsImageFile = null;
+let otaFile = null;
+let espToolBusy = false;
+
+function setEspToolBusy(busy, message='', type='run'){
+  espToolBusy = busy;
+  document.querySelectorAll('.esp-tool-control').forEach(el=>{ el.disabled = busy; });
+  const box = document.getElementById('esp-tool-status');
+  const text = document.getElementById('esp-tool-status-text');
+  if (!box || !text) return;
+  box.classList.toggle('open', Boolean(message));
+  box.classList.toggle('err', type === 'err');
+  text.textContent = message;
+}
+
+function setEspToolMessage(message, type='run'){
+  setEspToolBusy(false, message, type);
+}
+
+function clearEspToolBusy(){
+  espToolBusy = false;
+  document.querySelectorAll('.esp-tool-control').forEach(el=>{ el.disabled = false; });
+}
+
+function ru(strings, ...values){
+  return strings.reduce((out, part, index)=> out + part + (values[index] ?? ''), '');
+}
+
+function loadEsptoolModule(){
+  if (!esptoolModulePromise){
+    esptoolModulePromise = import('https://unpkg.com/esptool-js/lib/index.js');
+  }
+  return esptoolModulePromise;
+}
+
+async function withEspLoader(task){
+  if (!navigator.serial) throw new Error('Web Serial not supported - use Chrome or Edge');
+  const { ESPLoader, Transport } = await loadEsptoolModule();
+  const port = await navigator.serial.requestPort();
+  const transport = new Transport(port, true);
+  const loader = new ESPLoader({
+    transport,
+    baudrate: 115200,
+    terminal: {
+      clean(){},
+      writeLine(data){ if (data) serialLog(String(data), 'sys'); },
+      write(data){ if (data) serialLog(String(data), 'sys'); }
+    },
+    debugLogging: false
+  });
+  try {
+    const chip = await loader.main();
+    serialLog(`Connected to ${chip}`, 'sys');
+    return await task(loader);
+  } finally {
+    try { await loader.after?.('hard_reset'); } catch(_){}
+    try { await transport.disconnect?.(); } catch(_){}
+  }
+}
+
+async function eraseEspFlash(){
+  if (espToolBusy) return;
+  if (!confirm('Erase the entire ESP flash chip? This removes firmware, NVS, EEPROM data and filesystem.')) return;
+  try {
+    setStatus('Erasing flash...', 'run');
+    setEspToolBusy(true, ru`\u0421\u0442\u0438\u0440\u0430\u044e \u043f\u0430\u043c\u044f\u0442\u044c \u0447\u0438\u043f\u0430, \u043f\u043e\u0436\u0430\u043b\u0443\u0439\u0441\u0442\u0430, \u043d\u0435 \u043e\u0442\u043a\u043b\u044e\u0447\u0430\u0439\u0442\u0435 \u043a\u0430\u0431\u0435\u043b\u044c. \u041d\u0430 ESP32 \u0441 8-16 MB flash \u044d\u0442\u043e \u043c\u043e\u0436\u0435\u0442 \u0437\u0430\u043d\u044f\u0442\u044c 5-15 \u0441\u0435\u043a\u0443\u043d\u0434.`);
+    await withEspLoader(loader=>loader.eraseFlash());
+    setStatus('✓ Flash erased', 'ok');
+    setEspToolMessage('Flash erased. You can flash firmware again now.', 'ok');
+    serialLog('ESP flash erased', 'sys');
+  } catch(e){
+    setStatus('✗ Erase failed', 'err');
+    setEspToolMessage('Erase failed: ' + e.message, 'err');
+    serialLog('Erase error: ' + e.message, 'sys');
+  } finally {
+    clearEspToolBusy();
+  }
+}
+
+async function addFsFiles(fileList){
+  const incoming = [...fileList];
+  for (const file of incoming){
+    fsFiles.push({
+      name:file.webkitRelativePath || file.name,
+      size:file.size,
+      file
+    });
+  }
+  renderFsFiles();
+}
+
+function renderFsFiles(){
+  const box = document.getElementById('fs-list');
+  if (!box) return;
+  box.innerHTML = '';
+  if (!fsFiles.length){
+    box.innerHTML = '<span style="color:var(--muted);font-size:11px">No FS source files</span>';
+    return;
+  }
+  fsFiles.forEach((item, index)=>{
+    const chip = document.createElement('span');
+    chip.className = 'fs-chip';
+    chip.append(document.createTextNode(`${item.name} (${Math.ceil(item.size / 1024)}K)`));
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.textContent = 'x';
+    del.onclick = ()=>{ fsFiles.splice(index, 1); renderFsFiles(); };
+    chip.appendChild(del);
+    box.appendChild(chip);
+  });
+}
+
+async function exportFsZip(){
+  try {
+    if (!window.JSZip) throw new Error('JSZip is not loaded yet');
+    if (!fsFiles.length) throw new Error('Add FS files first');
+    const zip = new JSZip();
+    for (const item of fsFiles){
+      zip.file(item.name.replace(/^\/+/, ''), await item.file.arrayBuffer());
+    }
+    downloadBlob(await zip.generateAsync({ type:'blob' }), 'esp32-fs-files.zip');
+    setStatus('✓ FS ZIP exported', 'ok');
+  } catch(e){
+    setStatus('✗ FS ZIP failed', 'err');
+    serialLog('FS ZIP error: ' + e.message, 'sys');
+  }
+}
+
+function setFsImageFile(file){
+  fsImageFile = file || null;
+  if (fsImageFile) serialLog(`FS image selected: ${fsImageFile.name}`, 'sys');
+}
+
+function parseHexOrDecimal(value){
+  const text = String(value || '').trim();
+  if (/^0x[0-9a-f]+$/i.test(text)) return parseInt(text, 16);
+  const n = Number(text);
+  if (!Number.isFinite(n) || n < 0) throw new Error('Invalid flash offset');
+  return n;
+}
+
+async function flashFsImage(){
+  if (espToolBusy) return;
+  if (!fsImageFile) {
+    setStatus('Select FS .bin first', 'run');
+    return;
+  }
+  try {
+    const offset = parseHexOrDecimal(document.getElementById('fs-offset').value);
+    const data = new Uint8Array(await fsImageFile.arrayBuffer());
+    setStatus('Flashing FS...', 'run');
+    setEspToolBusy(true, ru`\u0417\u0430\u043b\u0438\u0432\u0430\u044e \u043e\u0431\u0440\u0430\u0437 \u0444\u0430\u0439\u043b\u043e\u0432\u043e\u0439 \u0441\u0438\u0441\u0442\u0435\u043c\u044b. \u041d\u0435 \u043e\u0442\u043a\u043b\u044e\u0447\u0430\u0439\u0442\u0435 ESP32 \u0434\u043e \u043e\u043a\u043e\u043d\u0447\u0430\u043d\u0438\u044f \u0437\u0430\u043f\u0438\u0441\u0438.`);
+    await withEspLoader(loader=>loader.writeFlash({
+      fileArray:[{ data, address:offset }],
+      flashMode:'dio',
+      flashFreq:'40m',
+      flashSize:'4MB',
+      eraseAll:false,
+      compress:true,
+      reportProgress:(_, written, total)=>{
+        setStatus(`FS ${Math.round(written / total * 100)}%`, 'run');
+        setEspToolBusy(true, ru`\u0417\u0430\u043b\u0438\u0432\u0430\u044e \u043e\u0431\u0440\u0430\u0437 \u0444\u0430\u0439\u043b\u043e\u0432\u043e\u0439 \u0441\u0438\u0441\u0442\u0435\u043c\u044b: ${Math.round(written / total * 100)}%. \u041d\u0435 \u043e\u0442\u043a\u043b\u044e\u0447\u0430\u0439\u0442\u0435 \u043a\u0430\u0431\u0435\u043b\u044c.`);
+      }
+    }));
+    setStatus('✓ FS flashed', 'ok');
+    setEspToolMessage(`FS image flashed at 0x${offset.toString(16).toUpperCase()}`, 'ok');
+    serialLog(`FS image flashed at 0x${offset.toString(16).toUpperCase()}`, 'sys');
+  } catch(e){
+    setStatus('✗ FS flash failed', 'err');
+    setEspToolMessage('FS flash failed: ' + e.message, 'err');
+    serialLog('FS flash error: ' + e.message, 'sys');
+  } finally {
+    clearEspToolBusy();
+  }
+}
+
+function setOtaFile(file){
+  otaFile = file || null;
+  if (otaFile) serialLog(`OTA file selected: ${otaFile.name}`, 'sys');
+}
+
+async function latestOtaBlob(){
+  if (otaFile) return otaFile;
+  const manifestUrl = latestManifestUrl || `${BUILDS}/manifest.json?t=${Date.now()}`;
+  const res = await fetch(manifestUrl, { cache:'no-store' });
+  if (!res.ok) throw new Error(`Manifest not found (${res.status})`);
+  const manifest = await res.json();
+  const part = manifest.builds?.[0]?.parts?.find(p=>/firmware|app/i.test(p.path));
+  if (!part) throw new Error('No app firmware part found in manifest');
+  const bin = await fetch(artifactUrl(part.path), { cache:'no-store' });
+  if (!bin.ok) throw new Error(`Firmware not found (${bin.status})`);
+  return await bin.blob();
+}
+
+async function uploadOta(){
+  if (espToolBusy) return;
+  const url = document.getElementById('ota-url').value.trim();
+  if (!url) {
+    setStatus('Enter OTA URL', 'run');
+    return;
+  }
+  try {
+    setStatus('Uploading OTA...', 'run');
+    setEspToolBusy(true, ru`\u041e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u044e \u043f\u0440\u043e\u0448\u0438\u0432\u043a\u0443 \u043f\u043e Wi-Fi. \u0423\u0431\u0435\u0434\u0438\u0442\u0435\u0441\u044c, \u0447\u0442\u043e \u0442\u0435\u043b\u0435\u0444\u043e\u043d/\u041f\u041a \u0438 ESP32 \u0432 \u043e\u0434\u043d\u043e\u0439 \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u043e\u0439 \u0441\u0435\u0442\u0438.`);
+    const res = await fetch(url, {
+      method:'POST',
+      body:await latestOtaBlob()
+    });
+    if (!res.ok) throw new Error(`OTA HTTP ${res.status}`);
+    setStatus('✓ OTA uploaded', 'ok');
+    setEspToolMessage('OTA upload complete. ESP32 may reboot now.', 'ok');
+    serialLog('OTA upload complete', 'sys');
+  } catch(e){
+    const localHint = ru`\u0423\u0431\u0435\u0434\u0438\u0442\u0435\u0441\u044c, \u0447\u0442\u043e \u0442\u0435\u043b\u0435\u0444\u043e\u043d/\u041f\u041a \u0438 \u043f\u043b\u0430\u0442\u0430 \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u044b \u043a \u043e\u0434\u043d\u043e\u0439 Wi-Fi \u0441\u0435\u0442\u0438, \u0430 \u0430\u0434\u0440\u0435\u0441 ESP32 \u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d \u0438\u0437 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0430.`;
+    setStatus('✗ OTA failed', 'err');
+    setEspToolMessage(`OTA failed: ${e.message}. ${localHint}`, 'err');
+    serialLog('OTA error: ' + e.message + '. ' + localHint, 'sys');
+  } finally {
+    clearEspToolBusy();
+  }
+}
+
+const PINOUTS = {
+  uno:[
+    ['D0','RX'],['D1','TX'],['D2','INT0'],['D3','PWM'],['D4','Digital'],['D5','PWM'],
+    ['D6','PWM'],['D7','Digital'],['D8','Digital'],['D9','PWM'],['D10','PWM/SS'],
+    ['D11','PWM/MOSI'],['D12','MISO'],['D13','SCK/LED'],['A4','SDA'],['A5','SCL']
+  ],
+  nano:[
+    ['D0','RX'],['D1','TX'],['D2','INT0'],['D3','PWM'],['D5','PWM'],['D6','PWM'],
+    ['D9','PWM'],['D10','PWM/SS'],['D11','PWM/MOSI'],['D12','MISO'],['D13','SCK/LED'],
+    ['A4','SDA'],['A5','SCL'],['A6','Analog'],['A7','Analog']
+  ],
+  mega:[
+    ['D0','RX0'],['D1','TX0'],['D2','PWM/INT'],['D3','PWM/INT'],['D4','PWM'],['D5','PWM'],
+    ['D6','PWM'],['D7','PWM'],['D20','SDA'],['D21','SCL'],['D50','MISO'],['D51','MOSI'],
+    ['D52','SCK'],['D53','SS']
+  ],
+  esp32:[
+    ['GPIO 0','BOOT'],['GPIO 2','LED/strapping'],['GPIO 4','Touch/PWM'],['GPIO 5','VSPI SS'],
+    ['GPIO 12','Strapping'],['GPIO 13','PWM'],['GPIO 14','PWM'],['GPIO 15','Strapping'],
+    ['GPIO 16','UART2 RX'],['GPIO 17','UART2 TX'],['GPIO 18','VSPI SCK'],['GPIO 19','VSPI MISO'],
+    ['GPIO 21','SDA'],['GPIO 22','SCL'],['GPIO 23','VSPI MOSI'],['GPIO 25','DAC/PWM'],
+    ['GPIO 26','DAC/PWM'],['GPIO 27','Touch/PWM'],['GPIO 32','ADC/PWM'],['GPIO 33','ADC/PWM'],
+    ['GPIO 34','Input only'],['GPIO 35','Input only'],['GPIO 36','Input only'],['GPIO 39','Input only']
+  ],
+  'esp32-s3':[
+    ['GPIO 0','BOOT'],['GPIO 1','ADC/PWM'],['GPIO 2','ADC/PWM'],['GPIO 3','Strapping'],
+    ['GPIO 4','ADC/PWM'],['GPIO 5','ADC/PWM'],['GPIO 6','ADC/PWM'],['GPIO 7','ADC/PWM'],
+    ['GPIO 8','SDA common'],['GPIO 9','SCL common'],['GPIO 10','PWM'],['GPIO 11','PWM'],
+    ['GPIO 12','PWM'],['GPIO 13','PWM'],['GPIO 14','PWM'],['GPIO 15','PWM'],
+    ['GPIO 43','UART0 TX'],['GPIO 44','UART0 RX']
+  ],
+  'esp32-c3':[
+    ['GPIO 0','ADC/PWM'],['GPIO 1','ADC/PWM'],['GPIO 2','ADC/PWM'],['GPIO 3','ADC/PWM'],
+    ['GPIO 4','SDA common'],['GPIO 5','SCL common'],['GPIO 6','SPI'],['GPIO 7','SPI'],
+    ['GPIO 8','BOOT/strapping'],['GPIO 9','BOOT'],['GPIO 10','PWM'],['GPIO 18','USB D-'],
+    ['GPIO 19','USB D+'],['GPIO 20','UART0 RX'],['GPIO 21','UART0 TX']
+  ]
+};
+
+function renderPinout(){
+  const { board } = boardInfo();
+  const grid = document.getElementById('pinout-grid');
+  if (!grid) return;
+  const pins = PINOUTS[board] || PINOUTS.esp32;
+  grid.innerHTML = '';
+  pins.forEach(([pin, note])=>{
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pin-btn';
+    btn.innerHTML = `<b>${pin}</b><span>${note}</span>`;
+    btn.onclick = async ()=>{
+      const value = pin.replace(/^GPIO\s+/, '');
+      await navigator.clipboard?.writeText(value);
+      setStatus(`✓ Copied ${value}`, 'ok');
+    };
+    grid.appendChild(btn);
+  });
+}
+
+function togglePinout(){
+  const pane = document.getElementById('pinout-pane');
+  const open = pane.style.display === 'none';
+  pane.style.display = open ? '' : 'none';
+  if (open) renderPinout();
+}
+
 function getSecrets(){
   return {
     WIFI_SSID: document.getElementById('secret-ssid')?.value || '',
@@ -1096,6 +1671,96 @@ function insertSecretsInclude(){
 // ────────────────────────────────────────────────────────────────────────────
 // Board selector
 // ────────────────────────────────────────────────────────────────────────────
+const FLASH_KB = 4096;
+const PARTITION_APP_OFFSET_KB = 64;
+const PARTITION_NVS_KB = 20;
+const PARTITION_OTADATA_KB = 8;
+const PARTITION_NVS_OFFSET_KB = 36;
+const PARTITION_OTADATA_OFFSET_KB = 56;
+
+function hexOffset(kb){
+  return '0x' + (kb * 1024).toString(16).toUpperCase();
+}
+
+function csvSize(kb){
+  return kb >= 1024 && kb % 1024 === 0 ? `${kb / 1024}M` : `${kb}K`;
+}
+
+function partitionState(){
+  const appInput = document.getElementById('partition-app');
+  const fsInput = document.getElementById('partition-fs');
+  let appKb = Number(appInput?.value || 1792);
+  let fsKb = Number(fsInput?.value || 1024);
+  const usableKb = FLASH_KB - PARTITION_APP_OFFSET_KB;
+  if (appKb + fsKb > usableKb){
+    fsKb = Math.max(256, usableKb - appKb);
+    if (fsInput) fsInput.value = fsKb;
+  }
+  const nvsOffset = PARTITION_NVS_OFFSET_KB;
+  const otaOffset = PARTITION_OTADATA_OFFSET_KB;
+  const appOffset = PARTITION_APP_OFFSET_KB;
+  const fsOffset = appOffset + appKb;
+  return { appKb, fsKb, nvsOffset, otaOffset, appOffset, fsOffset };
+}
+
+function partitionCsv(){
+  const p = partitionState();
+  return [
+    '# Name,   Type, SubType, Offset,  Size, Flags',
+    `nvs,      data, nvs,     ${hexOffset(p.nvsOffset)}, ${csvSize(PARTITION_NVS_KB)},`,
+    `otadata,  data, ota,     ${hexOffset(p.otaOffset)}, ${csvSize(PARTITION_OTADATA_KB)},`,
+    `app0,     app,  ota_0,   ${hexOffset(p.appOffset)}, ${csvSize(p.appKb)},`,
+    `spiffs,   data, spiffs,  ${hexOffset(p.fsOffset)}, ${csvSize(p.fsKb)},`
+  ].join('\n');
+}
+
+function updatePartitionEditor(){
+  const p = partitionState();
+  const fsOffset = hexOffset(p.fsOffset);
+  document.getElementById('partition-app-label').textContent = `${p.appKb} KB`;
+  document.getElementById('partition-fs-label').textContent = `${p.fsKb} KB`;
+  document.getElementById('partition-csv').value = partitionCsv();
+  document.getElementById('partition-bar-nvs').style.width = `${PARTITION_NVS_KB / FLASH_KB * 100}%`;
+  document.getElementById('partition-bar-ota').style.width = `${PARTITION_OTADATA_KB / FLASH_KB * 100}%`;
+  document.getElementById('partition-bar-app').style.width = `${p.appKb / FLASH_KB * 100}%`;
+  document.getElementById('partition-bar-fs').style.width = `${p.fsKb / FLASH_KB * 100}%`;
+  updateFsOffsetHint(fsOffset);
+}
+
+function updateFsOffsetHint(offset = hexOffset(partitionState().fsOffset)){
+  const hint = document.getElementById('fs-offset-hint');
+  if (!hint) return;
+  hint.innerHTML = `FS partition starts at <button type="button" onclick="usePartitionFsOffset()">${offset}</button> from current partition table.`;
+}
+
+function usePartitionFsOffset(){
+  const offset = hexOffset(partitionState().fsOffset);
+  document.getElementById('fs-offset').value = offset;
+  setStatus(`✓ FS offset ${offset}`, 'ok');
+}
+
+function applyPartitionCsv(){
+  syncActiveFile();
+  const content = partitionCsv();
+  const existing = projectFiles.find(file=>file.name === 'partitions.csv');
+  if (existing) existing.content = content;
+  else projectFiles.push({ name:'partitions.csv', content });
+  activeFile = 'partitions.csv';
+  if (editor){
+    editor.setValue(content);
+    monaco.editor.setModelLanguage(editor.getModel(), 'plaintext');
+  }
+  renderFileTabs();
+  saveProjectFiles();
+  setStatus('✓ partitions.csv created', 'ok');
+  serialLog('partitions.csv generated for ESP32', 'sys');
+}
+
+function downloadPartitionCsv(){
+  downloadBlob(new Blob([partitionCsv()], { type:'text/csv;charset=utf-8' }), 'partitions.csv');
+  setStatus('✓ CSV downloaded', 'ok');
+}
+
 function boardInfo(){
   const [board, fqbn] = document.getElementById('board-sel').value.split('|');
   return { board, fqbn };
@@ -1108,6 +1773,9 @@ function onBoardChange(){
   const esp = isESP(board);
   document.getElementById('avr-section').style.display = esp ? 'none' : '';
   document.getElementById('esp-section').style.display = esp ? '' : 'none';
+  document.getElementById('partition-pane').style.display = esp ? '' : 'none';
+  document.getElementById('esp-tools-pane').style.display = esp ? '' : 'none';
+  renderPinout();
   if (!esp){
     // arduino-web-uploader board attr: uno | nano | mega
     const avrBoard = board === 'mega' ? 'mega' : board === 'nano' ? 'nano' : 'uno';
@@ -1426,14 +2094,72 @@ async function serialDisconnect(){
 async function serialSend(){
   const inp  = document.getElementById('serial-input');
   const text = inp.value;
-  if (!text || !serialWriter) return;
+  if (!text) return;
+  await serialSendText(text);
+  inp.value = '';
+}
+
+async function serialSendText(text){
+  if (!serialWriter){
+    serialLog('Serial is not connected', 'sys');
+    return;
+  }
   await serialWriter.write(new TextEncoder().encode(text + '\n'));
   serialLog('> ' + text, 'tx');
-  inp.value = '';
+}
+
+let serialMacros = JSON.parse(localStorage.getItem('serialMacros') || '[]');
+
+function saveSerialMacros(){
+  localStorage.setItem('serialMacros', JSON.stringify(serialMacros));
+}
+
+function renderSerialMacros(){
+  const box = document.getElementById('macro-list');
+  if (!box) return;
+  box.innerHTML = '';
+  if (!serialMacros.length){
+    box.innerHTML = '<span style="color:var(--muted);font-size:11px">No macros</span>';
+    return;
+  }
+  serialMacros.forEach((macro, index)=>{
+    const chip = document.createElement('span');
+    chip.className = 'macro-chip';
+    const send = document.createElement('button');
+    send.type = 'button';
+    send.style.color = 'var(--green)';
+    send.textContent = macro.name;
+    send.title = macro.command;
+    send.onclick = ()=> serialSendText(macro.command);
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.textContent = 'x';
+    del.onclick = ()=>{ serialMacros.splice(index, 1); saveSerialMacros(); renderSerialMacros(); };
+    chip.append(send, del);
+    box.appendChild(chip);
+  });
+}
+
+function addSerialMacro(){
+  const nameInput = document.getElementById('macro-name');
+  const commandInput = document.getElementById('macro-command');
+  const name = nameInput.value.trim();
+  const command = commandInput.value.trim();
+  if (!name || !command) return;
+  serialMacros.push({ name:name.slice(0, 24), command:command.slice(0, 160) });
+  saveSerialMacros();
+  renderSerialMacros();
+  nameInput.value = '';
+  commandInput.value = '';
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
   loadSecrets();
+  setupProjectDropZone();
+  updatePartitionEditor();
+  renderFsFiles();
+  renderSerialMacros();
+  renderPinout();
   document.getElementById('secret-ssid').addEventListener('input', saveSecrets);
   document.getElementById('secret-pass').addEventListener('input', saveSecrets);
   document.getElementById('serial-input').addEventListener('keydown', e=>{
@@ -1651,3 +2377,4 @@ window.addEventListener('load',()=>{
 </script>
 </body>
 </html>
+
