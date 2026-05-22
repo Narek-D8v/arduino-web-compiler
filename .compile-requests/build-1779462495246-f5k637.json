@@ -1,1 +1,0 @@
-{"code":"#include <Adafruit_SSD1306.h>\n#include <Adafruit_GFX.h>\n#include <Wire.h>\n// Blink\nvoid setup() {\n  pinMode(13, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(13, HIGH);\n  delay(1000);\n  digitalWrite(13, LOW);\n  delay(1000);\n}","files":[]}
