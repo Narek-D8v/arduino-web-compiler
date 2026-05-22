@@ -12,12 +12,14 @@
   --bg0:#07090f;--bg1:#0d1117;--bg2:#161b27;--bg3:#1e2535;
   --border:#252d3d;--green:#00e676;--blue:#2196f3;--red:#f44336;--amber:#ff9800;
   --text:#e2e8f0;--muted:#64748b;--mono:'JetBrains Mono',monospace;
+  --panel-width:340px;
 }
 html,body{height:100%;overflow:hidden}
 body{display:grid;grid-template-rows:48px 1fr;background:var(--bg0);color:var(--text);font-family:'Inter',sans-serif;font-size:14px}
 
 /* ── Toolbar ── */
-#toolbar{display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--bg1);border-bottom:1px solid var(--border);flex-shrink:0}
+#toolbar{display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--bg1);border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;overflow-y:hidden;min-width:0}
+#toolbar>*{flex:none}
 #toolbar h1{font-size:15px;font-weight:700;letter-spacing:.5px;color:var(--green);margin-right:8px;white-space:nowrap}
 .tb-sep{width:1px;height:24px;background:var(--border);margin:0 4px}
 select.tb-sel{background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:4px 8px;font-size:13px;cursor:pointer}
@@ -32,6 +34,9 @@ select.tb-sel:focus{outline:none;border-color:var(--blue)}
 .tb-btn.ghost:hover:not(:disabled){border-color:var(--muted)}
 .tb-toggle{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 9px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer}
 .tb-toggle input{accent-color:var(--green)}
+.tb-scale{display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 9px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:12px;font-weight:600;white-space:nowrap}
+.tb-scale input{width:88px;accent-color:var(--green)}
+.tb-scale span{font-family:var(--mono);font-size:11px;color:var(--muted);min-width:34px;text-align:right}
 #tb-status{font-size:12px;font-family:var(--mono);padding:4px 10px;border-radius:4px;margin-left:4px}
 #tb-status.ok{background:rgba(0,230,118,.12);color:var(--green);border:1px solid rgba(0,230,118,.2)}
 #tb-status.err{background:rgba(244,67,54,.12);color:var(--red);border:1px solid rgba(244,67,54,.2)}
@@ -39,7 +44,7 @@ select.tb-sel:focus{outline:none;border-color:var(--blue)}
 #tb-status.hidden{display:none}
 
 /* ── Main Layout ── */
-#main{display:grid;grid-template-columns:1fr 340px;height:100%;overflow:hidden}
+#main{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,var(--panel-width));height:100%;min-height:0;overflow:hidden}
 
 /* ── Editor ── */
 #editor-wrap{display:flex;flex-direction:column;height:100%;overflow:hidden}
@@ -54,7 +59,7 @@ select.tb-sel:focus{outline:none;border-color:var(--blue)}
 #editor-wrap.drag-over{outline:2px dashed var(--blue);outline-offset:-8px;background:rgba(33,150,243,.06)}
 
 /* ── Right Panel ── */
-#panel{display:flex;flex-direction:column;border-left:1px solid var(--border);background:var(--bg1);overflow:hidden}
+#panel{display:flex;flex-direction:column;min-height:0;border-left:1px solid var(--border);background:var(--bg1);overflow-y:auto;overflow-x:hidden}
 .pane{border-bottom:1px solid var(--border);padding:14px}
 .pane:last-child{border-bottom:none}
 .pane-title{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
@@ -155,7 +160,7 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
 .build-step.fail .build-dot{background:var(--red)}
 
 /* Serial Monitor */
-#serial-wrap{flex:1;display:flex;flex-direction:column;min-height:0;padding:14px}
+#serial-wrap{flex:0 0 min(360px,48vh);display:flex;flex-direction:column;min-height:250px;padding:14px}
 #serial-out{flex:1;min-height:0;overflow-y:auto;background:var(--bg0);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--mono);font-size:12px;line-height:1.6}
 .serial-rx{color:var(--text)}
 .serial-tx{color:var(--blue)}
@@ -207,6 +212,13 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+@media (max-width:900px){
+  body{grid-template-rows:48px 1fr}
+  #main{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) minmax(260px,40vh)}
+  #panel{border-left:none;border-top:1px solid var(--border)}
+  #serial-wrap{flex:0 0 300px}
+}
 </style>
 </head>
 <body>
@@ -252,6 +264,7 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
     <option value="hc-black">High Contrast</option>
   </select>
   <label class="tb-toggle"><input type="checkbox" id="minimap-toggle" onchange="setMinimap(this.checked)"> Minimap</label>
+  <label class="tb-scale">Scale <input type="range" id="ui-scale" min="75" max="115" step="5" value="100" oninput="setUiScale(this.value)"><span id="ui-scale-value">100%</span></label>
   <div id="tb-status" class="hidden"></div>
 </div>
 
@@ -1167,6 +1180,19 @@ function setMinimap(enabled){
   const toggle = document.getElementById('minimap-toggle');
   if (toggle) toggle.checked = on;
   if (editor) editor.updateOptions({ minimap:{ enabled:on } });
+}
+
+function setUiScale(value){
+  const n = Math.min(115, Math.max(75, Number(value) || 100));
+  const scale = n / 100;
+  localStorage.setItem('uiScale', String(n));
+  document.body.style.zoom = String(scale);
+  document.documentElement.style.setProperty('--panel-width', n <= 85 ? '300px' : '340px');
+  const input = document.getElementById('ui-scale');
+  const label = document.getElementById('ui-scale-value');
+  if (input) input.value = String(n);
+  if (label) label.textContent = `${n}%`;
+  if (editor) requestAnimationFrame(()=>editor.layout());
 }
 
 function loadExample(key){
@@ -2154,6 +2180,7 @@ function addSerialMacro(){
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
+  setUiScale(localStorage.getItem('uiScale') || '100');
   loadSecrets();
   setupProjectDropZone();
   updatePartitionEditor();
