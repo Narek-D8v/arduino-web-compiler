@@ -40,6 +40,196 @@ jobs:
           import re
           from pathlib import Path
 
+          def c_string(value, limit=512):
+              return str(value or "")[:limit].replace("\\", "\\\\").replace('"', '\\"').replace("\r", "\\r").replace("\n", "\\n")
+
+          def insert_after_includes(source, line):
+              if line in source:
+                  return source
+              lines = source.splitlines()
+              last_include = -1
+              for index, text in enumerate(lines):
+                  if re.match(r"\s*#\s*include\b", text):
+                      last_include = index
+              lines.insert(last_include + 1, line)
+              return "\n".join(lines) + ("\n" if source.endswith("\n") else "")
+
+          def inject_call(source, function_name, call):
+              if call in source:
+                  return source
+              pattern = re.compile(r"(\bvoid\s+" + re.escape(function_name) + r"\s*\(\s*(?:void)?\s*\)\s*\{)")
+              if pattern.search(source):
+                  return pattern.sub(r"\1\n  " + call, source, count=1)
+              return source + f"\n\nvoid {function_name}() {{\n  {call}\n}}\n"
+
+          def smart_wifi_header(config):
+              ap_ssid = c_string(config.get("apSsid") or "ESP32-Setup", 48)
+              ap_pass = c_string(config.get("apPass") or "", 64)
+              title = c_string(config.get("portalTitle") or "ESP32 Wi-Fi Setup", 64)
+              accent = c_string(config.get("accent") or "#00e676", 16)
+              timeout = int(config.get("timeoutSeconds") or 12)
+              timeout = max(3, min(60, timeout)) * 1000
+              return f'''#pragma once
+          #if defined(ESP32) || defined(ARDUINO_ARCH_ESP32)
+          #include <Arduino.h>
+          #include <WiFi.h>
+          #include <WebServer.h>
+          #include <DNSServer.h>
+          #include <Preferences.h>
+
+          #if __has_include("secrets.h")
+          #include "secrets.h"
+          #endif
+
+          #ifndef SECRET_SSID
+          #define SECRET_SSID ""
+          #endif
+          #ifndef SECRET_PASS
+          #define SECRET_PASS ""
+          #endif
+
+          #define SMART_WIFI_AP_SSID "{ap_ssid}"
+          #define SMART_WIFI_AP_PASS "{ap_pass}"
+          #define SMART_WIFI_PORTAL_TITLE "{title}"
+          #define SMART_WIFI_ACCENT "{accent}"
+          #define SMART_WIFI_TIMEOUT_MS {timeout}UL
+
+          namespace SmartWiFi {{
+            static const byte DNS_PORT = 53;
+            static DNSServer dns;
+            static WebServer server(80);
+            static Preferences prefs;
+            static bool portalActive = false;
+
+            static String chipSuffix() {{
+              uint64_t mac = ESP.getEfuseMac();
+              String value = String((uint32_t)(mac & 0xFFFFFF), HEX);
+              value.toUpperCase();
+              return value;
+            }}
+
+            static String savedValue(const char *key) {{
+              prefs.begin("smartwifi", true);
+              String value = prefs.getString(key, "");
+              prefs.end();
+              return value;
+            }}
+
+            static void saveCredentials(const String &ssid, const String &pass) {{
+              prefs.begin("smartwifi", false);
+              prefs.putString("ssid", ssid);
+              prefs.putString("pass", pass);
+              prefs.end();
+            }}
+
+            static String page() {{
+              String html;
+              html.reserve(2400);
+              html += F("<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>");
+              html += F("<title>");
+              html += SMART_WIFI_PORTAL_TITLE;
+              html += F("</title><style>body{{margin:0;font-family:Arial,sans-serif;background:#071018;color:#e2e8f0}}main{{max-width:420px;margin:8vh auto;padding:24px}}h1{{font-size:24px;margin:0 0 10px}}p{{color:#9aa7b7;line-height:1.45}}input,button{{width:100%;box-sizing:border-box;border-radius:8px;border:1px solid #263244;padding:12px;margin-top:10px;font-size:16px}}input{{background:#111827;color:#fff}}button{{border:none;background:");
+              html += SMART_WIFI_ACCENT;
+              html += F(";color:#061018;font-weight:700}}</style></head><body><main><h1>");
+              html += SMART_WIFI_PORTAL_TITLE;
+              html += F("</h1><p>Select your home Wi-Fi network and save credentials.</p><form method='POST' action='/save'><input name='ssid' placeholder='Wi-Fi SSID' autofocus><input name='pass' type='password' placeholder='Wi-Fi password'><button>Save and reboot</button></form></main></body></html>");
+              return html;
+            }}
+
+            static void handleRoot() {{
+              server.send(200, "text/html", page());
+            }}
+
+            static void handleSave() {{
+              String ssid = server.arg("ssid");
+              String pass = server.arg("pass");
+              ssid.trim();
+              if (!ssid.length()) {{
+                server.send(400, "text/plain", "SSID is required");
+                return;
+              }}
+              saveCredentials(ssid, pass);
+              server.send(200, "text/html", "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='font-family:Arial,sans-serif;background:#071018;color:#e2e8f0;padding:32px'><h2>Saved</h2><p>ESP32 is rebooting.</p></body>");
+              delay(700);
+              ESP.restart();
+            }}
+
+            static void startPortal() {{
+              WiFi.mode(WIFI_AP_STA);
+              String apName = SMART_WIFI_AP_SSID;
+              if (!apName.length()) apName = "ESP32-Setup";
+              apName += "-";
+              apName += chipSuffix();
+              const char *apPass = SMART_WIFI_AP_PASS;
+              if (strlen(apPass) >= 8) WiFi.softAP(apName.c_str(), apPass);
+              else WiFi.softAP(apName.c_str());
+              IPAddress ip = WiFi.softAPIP();
+              dns.start(DNS_PORT, "*", ip);
+              server.on("/", HTTP_GET, handleRoot);
+              server.on("/save", HTTP_POST, handleSave);
+              server.onNotFound(handleRoot);
+              server.begin();
+              portalActive = true;
+              Serial.print("Smart Wi-Fi portal: ");
+              Serial.println(apName);
+              Serial.print("Open http://");
+              Serial.println(ip);
+            }}
+
+            static bool connectStation(unsigned long timeoutMs) {{
+              String ssid = savedValue("ssid");
+              String pass = savedValue("pass");
+              if (!ssid.length()) {{
+                ssid = SECRET_SSID;
+                pass = SECRET_PASS;
+              }}
+              ssid.trim();
+              if (!ssid.length()) return false;
+              WiFi.mode(WIFI_STA);
+              WiFi.begin(ssid.c_str(), pass.c_str());
+              Serial.print("Smart Wi-Fi connecting to ");
+              Serial.println(ssid);
+              unsigned long started = millis();
+              while (WiFi.status() != WL_CONNECTED && millis() - started < timeoutMs) {{
+                delay(250);
+                Serial.print(".");
+              }}
+              Serial.println();
+              if (WiFi.status() == WL_CONNECTED) {{
+                Serial.print("Smart Wi-Fi connected: ");
+                Serial.println(WiFi.localIP());
+                return true;
+              }}
+              WiFi.disconnect(true);
+              return false;
+            }}
+
+            inline void handle();
+
+            inline void begin(unsigned long timeoutMs = SMART_WIFI_TIMEOUT_MS) {{
+              if (!connectStation(timeoutMs)) {{
+                startPortal();
+                while (portalActive) {{
+                  handle();
+                  delay(2);
+                }}
+              }}
+            }}
+
+            inline void handle() {{
+              if (!portalActive) return;
+              dns.processNextRequest();
+              server.handleClient();
+            }}
+          }}
+          #else
+          namespace SmartWiFi {{
+            inline void begin(unsigned long timeoutMs = 0) {{ (void)timeoutMs; }}
+            inline void handle() {{}}
+          }}
+          #endif
+          '''
+
           request_path = os.environ.get("PROJECT_REQUEST_PATH", "")
           if not request_path.startswith(".compile-requests/"):
               raise SystemExit(f"Invalid project request path: {request_path}")
@@ -49,13 +239,27 @@ jobs:
               raise SystemExit(f"Project request file not found: {request_path}")
 
           data = json.loads(request_file.read_text(encoding="utf-8"))
+          event_path = os.environ.get("GITHUB_EVENT_PATH", "")
+          payload = {}
+          if event_path and Path(event_path).is_file():
+              payload = json.loads(Path(event_path).read_text(encoding="utf-8")).get("client_payload", {})
+
+          board = str(payload.get("board", ""))
+          features = data.get("features", {})
+          smart_config = data.get("smartWifi", {})
+          smart_enabled = board.startswith("esp32") and isinstance(features, dict) and bool(features.get("smartWifi")) and isinstance(smart_config, dict)
+
           out_dir = Path("build_sketch")
           out_dir.mkdir(exist_ok=True)
-          allowed_exts = {".h", ".hpp", ".hh", ".c", ".cpp", ".cc", ".ino", ".txt", ".json"}
+          allowed_exts = {".h", ".hpp", ".hh", ".c", ".cpp", ".cc", ".ino", ".txt", ".json", ".csv"}
 
           code = str(data.get("code", ""))
           if not code.strip():
               raise SystemExit("Project request has no sketch code")
+          if smart_enabled:
+              code = insert_after_includes(code, '#include "smart_wifi.h"')
+              code = inject_call(code, "setup", "SmartWiFi.begin();")
+              code = inject_call(code, "loop", "SmartWiFi.handle();")
           (out_dir / "build_sketch.ino").write_text(code, encoding="utf-8", newline="\n")
           print("Wrote project file: build_sketch.ino")
 
@@ -63,28 +267,24 @@ jobs:
           if not isinstance(files, list):
               files = []
 
-          for item in files[:20]:
+          for item in files[:40]:
               name = str(item.get("name", ""))
               name = name.replace("\\", "/").split("/")[-1]
               name = re.sub(r"[^A-Za-z0-9._-]", "_", name).lstrip(".")[:64]
               if not name or name == "build_sketch.ino":
                   continue
+              if smart_enabled and name == "smart_wifi.h":
+                  continue
               if Path(name).suffix.lower() not in allowed_exts:
                   continue
-              content = str(item.get("content", ""))[:120000]
+              content = str(item.get("content", ""))[:180000]
               (out_dir / name).write_text(content, encoding="utf-8", newline="\n")
               print(f"Wrote project file: {name}")
 
-          event_path = os.environ.get("GITHUB_EVENT_PATH", "")
-          payload = {}
-          if event_path and Path(event_path).is_file():
-              payload = json.loads(Path(event_path).read_text(encoding="utf-8")).get("client_payload", {})
-
           secrets = payload.get("secrets", {})
-          if isinstance(secrets, dict) and (secrets.get("WIFI_SSID") or secrets.get("WIFI_PASS")):
-              def c_string(value):
-                  return str(value or "")[:512].replace("\\", "\\\\").replace('"', '\\"').replace("\r", "\\r").replace("\n", "\\n")
-
+          if smart_enabled or (isinstance(secrets, dict) and (secrets.get("WIFI_SSID") or secrets.get("WIFI_PASS"))):
+              if not isinstance(secrets, dict):
+                  secrets = {}
               secrets_header = "\n".join([
                   "#pragma once",
                   f"#define SECRET_SSID \"{c_string(secrets.get('WIFI_SSID'))}\"",
@@ -93,6 +293,10 @@ jobs:
               ])
               (out_dir / "secrets.h").write_text(secrets_header, encoding="utf-8", newline="\n")
               print("Wrote generated project file: secrets.h")
+
+          if smart_enabled:
+              (out_dir / "smart_wifi.h").write_text(smart_wifi_header(smart_config), encoding="utf-8", newline="\n")
+              print("Wrote generated project file: smart_wifi.h")
           PY
 
       - name: Install Libraries
@@ -165,7 +369,7 @@ jobs:
 
           for HEADER in $INCLUDES; do
             case "$HEADER" in
-              Arduino.h|avr/*.h|util/*.h|pgmspace.h|interrupt.h|esp_*.h|freertos/*.h)
+              Arduino.h|avr/*.h|util/*.h|pgmspace.h|interrupt.h|esp_*.h|freertos/*.h|DNSServer.h|Preferences.h)
                 continue ;;
             esac
 
@@ -232,11 +436,16 @@ jobs:
             fi
             [ -n "$BOOTLOADER" ] && cp "$BOOTLOADER" bootloader.bin && echo "bootloader.bin"
 
-            PARTITIONS=$(find ~/.arduino15/packages/esp32 -path "*/partitions/default.bin" | head -1)
-            if [ -z "$PARTITIONS" ]; then
-              PARTITIONS=$(find ~/.arduino15/packages/esp32 -name "default.bin" | head -1)
+            PART_OUT=$(find out/ -name "*partition*.bin" -o -name "partitions.bin" | head -1)
+            if [ -n "$PART_OUT" ]; then
+              cp "$PART_OUT" partitions.bin && echo "partitions.bin from out"
+            else
+              PARTITIONS=$(find ~/.arduino15/packages/esp32 -path "*/partitions/default.bin" | head -1)
+              if [ -z "$PARTITIONS" ]; then
+                PARTITIONS=$(find ~/.arduino15/packages/esp32 -name "default.bin" | head -1)
+              fi
+              [ -n "$PARTITIONS" ] && cp "$PARTITIONS" partitions.bin && echo "partitions.bin"
             fi
-            [ -n "$PARTITIONS" ] && cp "$PARTITIONS" partitions.bin && echo "partitions.bin"
 
             BOOT_APP=$(find ~/.arduino15/packages/esp32 -name "boot_app0.bin" | head -1)
             [ -n "$BOOT_APP" ] && cp "$BOOT_APP" boot_app0.bin && echo "boot_app0.bin"
