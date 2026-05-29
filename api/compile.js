@@ -1,8 +1,13 @@
-// Vercel Serverless Function для компиляции Arduino кода
-// Переменная окружения MY_GITHUB_TOKEN должна быть настроена в Vercel Dashboard
+const REPO_OWNER = process.env.GITHUB_OWNER || 'Narek-D8v';
+const REPO_NAME = process.env.GITHUB_REPO || 'arduino-web-compiler';
+const REPO_BRANCH = process.env.GITHUB_BRANCH || 'main';
 
-module.exports = async (req, res) => {
-    // Разрешаем CORS
+const ALLOWED_BOARDS = new Set(['uno', 'nano', 'mega', 'esp32', 'esp32-s3', 'esp32-c3']);
+const MAX_CODE_BYTES = 300000;
+const MAX_FILE_BYTES = 180000;
+const MAX_FILES = 40;
+
+function setCors(res) {
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -10,151 +15,196 @@ module.exports = async (req, res) => {
         'Access-Control-Allow-Headers',
         'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
     );
+}
 
-    // Обработка preflight запроса
+function cleanFileName(name) {
+    return String(name || '')
+        .replace(/\\/g, '/')
+        .split('/')
+        .pop()
+        .replace(/[^a-zA-Z0-9._-]/g, '_')
+        .replace(/^\.+/, '')
+        .slice(0, 64);
+}
+
+function cleanText(value, limit, fallback = '') {
+    const text = String(value ?? fallback).replace(/\0/g, '').slice(0, limit);
+    return text || fallback;
+}
+
+function cleanColor(value) {
+    return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value) : '#00e676';
+}
+
+function cleanBoard(value) {
+    const board = String(value || 'uno').trim();
+    return ALLOWED_BOARDS.has(board) ? board : 'uno';
+}
+
+function cleanFqbn(value) {
+    return String(value || '')
+        .replace(/[^a-zA-Z0-9:._=-]/g, '')
+        .slice(0, 120);
+}
+
+function normalizeSmartWifi(raw, enabled) {
+    if (!enabled || !raw || typeof raw !== 'object') return undefined;
+
+    let apPass = cleanText(raw.apPass, 64, '');
+    if (apPass && apPass.length < 8) apPass = '';
+
+    const timeout = Number(raw.timeoutSeconds);
+    const apSsid = cleanText(raw.apSsid, 48, 'ESP32-Setup').trim() || 'ESP32-Setup';
+    const portalTitle = cleanText(raw.portalTitle, 64, 'ESP32 Wi-Fi Setup').trim() || 'ESP32 Wi-Fi Setup';
+    return {
+        enabled: true,
+        apSsid,
+        apPass,
+        portalTitle,
+        accent: cleanColor(raw.accent),
+        timeoutSeconds: Number.isFinite(timeout) ? Math.min(60, Math.max(3, Math.round(timeout))) : 12
+    };
+}
+
+async function githubJson(url, options) {
+    const response = await fetch(url, options);
+    if (response.ok) return response;
+    const details = await response.text();
+    const error = new Error(`GitHub API error: ${response.status}`);
+    error.status = response.status;
+    error.details = details;
+    throw error;
+}
+
+module.exports = async (req, res) => {
+    setCors(res);
+
     if (req.method === 'OPTIONS') {
         res.status(200).end();
         return;
     }
 
-    // Принимаем только POST запросы
     if (req.method !== 'POST') {
-        return res.status(405).json({ 
-            success: false, 
-            error: 'Method not allowed. Use POST.' 
+        return res.status(405).json({
+            success: false,
+            error: 'Method not allowed. Use POST.'
         });
     }
 
     try {
-        // Получаем поля из тела запроса
-        const { code, files, secrets, board, fqbn, timestamp } = req.body;
+        const { code, files, secrets, board, fqbn, timestamp, features, smartWifi } = req.body || {};
+        const cleanCode = cleanText(code, MAX_CODE_BYTES, '');
 
-        if (!code) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Code is required in request body' 
+        if (!cleanCode.trim()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Code is required in request body'
             });
         }
 
         const cleanFiles = Array.isArray(files)
-            ? files.slice(0, 20).map(file => ({
-                name: String(file.name || '')
-                    .replace(/\\/g, '/')
-                    .split('/')
-                    .pop()
-                    .replace(/[^a-zA-Z0-9._-]/g, '_')
-                    .replace(/^\.+/, '')
-                    .slice(0, 64),
-                content: String(file.content || '').slice(0, 120000)
+            ? files.slice(0, MAX_FILES).map(file => ({
+                name: cleanFileName(file && file.name),
+                content: cleanText(file && file.content, MAX_FILE_BYTES, '')
             })).filter(file => file.name)
             : [];
 
         const cleanSecrets = secrets && typeof secrets === 'object' ? {
-            WIFI_SSID: String(secrets.WIFI_SSID || '').slice(0, 512),
-            WIFI_PASS: String(secrets.WIFI_PASS || '').slice(0, 512)
+            WIFI_SSID: cleanText(secrets.WIFI_SSID, 512, ''),
+            WIFI_PASS: cleanText(secrets.WIFI_PASS, 512, '')
         } : null;
         const dispatchSecrets = cleanSecrets && (cleanSecrets.WIFI_SSID || cleanSecrets.WIFI_PASS)
             ? cleanSecrets
             : undefined;
 
-        // Проверяем наличие токена в переменных окружения
+        const cleanBoardName = cleanBoard(board);
+        const cleanFeatures = {
+            smartWifi: Boolean((features && features.smartWifi) || (smartWifi && smartWifi.enabled)) && cleanBoardName.startsWith('esp32')
+        };
+        const cleanSmartWifi = normalizeSmartWifi(smartWifi, cleanFeatures.smartWifi);
+
         const githubToken = process.env.MY_GITHUB_TOKEN;
-        
         if (!githubToken) {
-            return res.status(500).json({ 
-                success: false, 
-                error: 'GitHub token not configured on server' 
+            return res.status(500).json({
+                success: false,
+                error: 'GitHub token not configured on server'
             });
         }
-
-        // Данные репозитория
-        const username = 'Narek-D8v';
-        const repo = 'arduino-web-compiler';
 
         const requestId = `build-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const requestPath = `.compile-requests/${requestId}.json`;
         const requestBody = JSON.stringify({
-            code,
-            files: cleanFiles
+            code: cleanCode,
+            files: cleanFiles,
+            features: cleanFeatures,
+            smartWifi: cleanSmartWifi
         });
 
-        const uploadResponse = await fetch(
-            `https://api.github.com/repos/${username}/${repo}/contents/${requestPath}`,
+        const headers = {
+            'Authorization': `token ${githubToken}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json',
+            'User-Agent': 'Arduino-Web-Compiler'
+        };
+
+        await githubJson(
+            `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${requestPath}`,
             {
                 method: 'PUT',
-                headers: {
-                    'Authorization': `token ${githubToken}`,
-                    'Accept': 'application/vnd.github.v3+json',
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Arduino-Web-Compiler'
-                },
+                headers,
                 body: JSON.stringify({
                     message: `Compile request: ${timestamp || new Date().toISOString()}`,
                     content: Buffer.from(requestBody, 'utf8').toString('base64'),
-                    branch: 'main'
+                    branch: REPO_BRANCH
                 })
             }
         );
 
-        if (uploadResponse.status !== 200 && uploadResponse.status !== 201) {
-            const uploadError = await uploadResponse.text();
-            return res.status(uploadResponse.status).json({
-                success: false,
-                error: `GitHub upload error: ${uploadResponse.status}`,
-                details: uploadError
-            });
-        }
-
-        // Отправляем repository_dispatch запрос в GitHub
-        const response = await fetch(
-            `https://api.github.com/repos/${username}/${repo}/dispatches`,
+        const dispatchResponse = await fetch(
+            `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/dispatches`,
             {
                 method: 'POST',
-                headers: {
-                    'Authorization': `token ${githubToken}`,
-                    'Accept': 'application/vnd.github.v3+json',
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Arduino-Web-Compiler'
-                },
+                headers,
                 body: JSON.stringify({
                     event_type: 'compile_cmd',
                     client_payload: {
                         request_id: requestId,
                         project_path: requestPath,
-                        board:     board || 'uno',
-                        fqbn:      fqbn || '',
+                        board: cleanBoardName,
+                        fqbn: cleanFqbn(fqbn),
                         timestamp: timestamp || new Date().toISOString(),
-                        source:    'web-interface',
-                        secrets:   dispatchSecrets
+                        source: 'web-interface',
+                        features: cleanFeatures,
+                        secrets: dispatchSecrets
                     }
                 })
             }
         );
 
-        // GitHub API возвращает 204 при успехе
-        if (response.status === 204) {
-            return res.status(200).json({ 
-                success: true, 
+        if (dispatchResponse.status === 204) {
+            return res.status(200).json({
+                success: true,
                 message: 'Compilation triggered successfully',
-                repository: `${username}/${repo}`,
+                repository: `${REPO_OWNER}/${REPO_NAME}`,
                 request_id: requestId,
                 timestamp: new Date().toISOString()
             });
-        } else {
-            const errorText = await response.text();
-            return res.status(response.status).json({ 
-                success: false, 
-                error: `GitHub API error: ${response.status}`,
-                details: errorText
-            });
         }
+
+        const errorText = await dispatchResponse.text();
+        return res.status(dispatchResponse.status).json({
+            success: false,
+            error: `GitHub API error: ${dispatchResponse.status}`,
+            details: errorText
+        });
 
     } catch (error) {
         console.error('Compilation API Error:', error);
-        return res.status(500).json({ 
-            success: false, 
-            error: 'Internal server error',
-            message: error.message 
+        return res.status(error.status || 500).json({
+            success: false,
+            error: error.status ? error.message : 'Internal server error',
+            details: error.details,
+            message: error.message
         });
     }
 };
