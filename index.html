@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Arduino Cloud IDE</title>
+<meta name="theme-color" content="#07090f">
+<meta name="application-name" content="Arduino Cloud IDE">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js"></script>
 <style>
@@ -90,6 +94,14 @@ select.tb-sel:focus{outline:none;border-color:var(--blue)}
 .secret-action{padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap}
 .secret-action:hover{border-color:var(--green);color:var(--green)}
 .secret-note{font-size:11px;color:var(--muted);line-height:1.4}
+.smart-wifi-wizard{display:none;gap:8px;margin-top:8px}
+.smart-wifi-wizard.open{display:grid}
+.smart-wifi-preview{border:1px solid var(--border);border-radius:8px;background:var(--bg0);overflow:hidden}
+.smart-wifi-preview-head{padding:9px 10px;font-weight:700;font-size:12px;color:#071018}
+.smart-wifi-preview-body{padding:10px;display:grid;gap:7px}
+.smart-wifi-preview-line{height:8px;border-radius:999px;background:var(--bg3)}
+.smart-wifi-preview-line.short{width:58%}
+.smart-wifi-preview-button{height:26px;border-radius:6px;background:var(--green)}
 
 /* Partition editor */
 .partition-grid{display:grid;gap:9px}
@@ -255,6 +267,9 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
   <button class="tb-btn ghost" onclick="exportProjectZip()">ZIP</button>
   <button class="tb-btn ghost" onclick="document.getElementById('project-zip-input').click()">Import ZIP</button>
   <input type="file" id="project-zip-input" accept=".zip" style="display:none" onchange="importProjectZip(this.files[0]); this.value=''">
+  <button class="tb-btn ghost" onclick="exportWokwiZip()">Wokwi ZIP</button>
+  <button class="tb-btn ghost" onclick="openWokwi()">Open Wokwi</button>
+  <button class="tb-btn ghost" id="pwa-install-btn" onclick="installPwa()" hidden>Install</button>
   <select class="tb-sel" id="theme-sel" onchange="setEditorTheme(this.value)">
     <option value="ard">Dark</option>
     <option value="vs">Light</option>
@@ -322,6 +337,27 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
           <button class="secret-action" type="button" onclick="insertSecretsInclude()">Include</button>
         </div>
         <div class="secret-note">Build creates secrets.h. Use #include "secrets.h" in your sketch.</div>
+      </div>
+    </div>
+
+    <!-- Smart Wi-Fi Wizard -->
+    <div class="pane" id="smart-wifi-pane">
+      <div class="pane-title">Captive Portal Wizard</div>
+      <div class="secret-grid">
+        <label class="tb-toggle" style="justify-content:flex-start">
+          <input type="checkbox" id="smart-wifi-toggle" onchange="toggleSmartWifi(this.checked)">
+          Enable Smart Wi-Fi
+        </label>
+        <div class="smart-wifi-wizard" id="smart-wifi-wizard">
+          <input id="smart-ap-ssid" class="secret-input" placeholder="Setup AP name" oninput="saveSmartWifiSettings(); renderSmartWifiPreview()">
+          <input id="smart-ap-pass" class="secret-input" type="password" placeholder="Setup AP password" oninput="saveSmartWifiSettings()">
+          <input id="smart-portal-title" class="secret-input" placeholder="Portal title" oninput="saveSmartWifiSettings(); renderSmartWifiPreview()">
+          <div class="tool-row">
+            <input id="smart-timeout" type="number" min="3" max="60" step="1" placeholder="Timeout sec" oninput="saveSmartWifiSettings()">
+            <input id="smart-accent" type="color" value="#00e676" title="Portal accent" oninput="saveSmartWifiSettings(); renderSmartWifiPreview()">
+          </div>
+          <div class="smart-wifi-preview" id="smart-wifi-preview"></div>
+        </div>
       </div>
     </div>
 
@@ -484,6 +520,31 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
 const BUILDS  = 'https://raw.githubusercontent.com/Narek-D8v/arduino-web-compiler/builds';
 const API     = '/api/compile';
 const STATUS_API = '/api/status';
+let deferredInstallPrompt = null;
+
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('/sw.js').catch(error=>{
+      console.warn('Service worker registration failed', error);
+    });
+  });
+}
+
+window.addEventListener('beforeinstallprompt', event=>{
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  const btn = document.getElementById('pwa-install-btn');
+  if (btn) btn.hidden = false;
+});
+
+async function installPwa(){
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice.catch(()=>null);
+  deferredInstallPrompt = null;
+  const btn = document.getElementById('pwa-install-btn');
+  if (btn) btn.hidden = true;
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Monaco Editor
@@ -1228,6 +1289,8 @@ async function shareProject(){
     const payload = JSON.stringify({
       version:1,
       board:document.getElementById('board-sel').value,
+      libs:installedLibs,
+      smartWifi:getSmartWifiConfig(),
       files:projectFiles
     });
     const encoded = bytesToBase64Url(await gzipText(payload));
@@ -1258,6 +1321,8 @@ async function restoreSharedProject(){
       document.getElementById('board-sel').value = data.board;
       onBoardChange();
     }
+    if (Array.isArray(data.libs)) restoreImportedLibs(data.libs);
+    if (data.smartWifi && typeof data.smartWifi === 'object') applySmartWifiConfig(data.smartWifi);
     applyProject(cleaned);
     setStatus('✓ Shared project loaded', 'ok');
     serialLog('Shared project loaded from URL', 'sys');
@@ -1276,6 +1341,8 @@ async function exportProjectZip(){
     zip.file('project.json', JSON.stringify({
       version:1,
       board:document.getElementById('board-sel').value,
+      libs:installedLibs,
+      smartWifi:getSmartWifiConfig(),
       exportedAt:new Date().toISOString()
     }, null, 2));
     const blob = await zip.generateAsync({ type:'blob' });
@@ -1303,6 +1370,8 @@ async function importProjectZip(file){
         try {
           const meta = JSON.parse(await entry.async('string'));
           board = typeof meta.board === 'string' ? meta.board : '';
+          if (Array.isArray(meta.libs)) restoreImportedLibs(meta.libs);
+          if (meta.smartWifi && typeof meta.smartWifi === 'object') applySmartWifiConfig(meta.smartWifi);
         } catch(_){}
         continue;
       }
@@ -1323,6 +1392,152 @@ async function importProjectZip(file){
     setStatus('✗ ZIP import failed', 'err');
     serialLog('ZIP import error: ' + e.message, 'sys');
   }
+}
+
+const WOKWI_BOARDS = {
+  uno:{ type:'wokwi-arduino-uno', newUrl:'https://wokwi.com/projects/new/arduino-uno', firmware:'firmware.hex' },
+  nano:{ type:'wokwi-arduino-nano', newUrl:'https://wokwi.com/projects/new/arduino-nano', firmware:'firmware.hex' },
+  mega:{ type:'wokwi-arduino-mega', newUrl:'https://wokwi.com/projects/new/arduino-mega', firmware:'firmware.hex' },
+  esp32:{ type:'wokwi-esp32-devkit-v1', newUrl:'https://wokwi.com/projects/new/esp32', firmware:'firmware.bin' },
+  'esp32-s3':{ type:'board-esp32-s3-devkitc-1', newUrl:'https://wokwi.com/projects/new/esp32-s3', firmware:'firmware.bin', attrs:{ serialInterface:'USB_SERIAL_JTAG' } },
+  'esp32-c3':{ type:'board-esp32-c3-devkitm-1', newUrl:'https://wokwi.com/projects/new/esp32-c3', firmware:'firmware.bin', attrs:{ serialInterface:'USB_SERIAL_JTAG' } }
+};
+
+function wokwiBoardInfo(){
+  const { board } = boardInfo();
+  return WOKWI_BOARDS[board] || WOKWI_BOARDS.uno;
+}
+
+function wokwiDiagram(){
+  const info = wokwiBoardInfo();
+  return {
+    version:1,
+    author:'Arduino Cloud IDE',
+    editor:'wokwi',
+    parts:[{
+      type:info.type,
+      id:'board',
+      top:0,
+      left:0,
+      attrs:info.attrs || {}
+    }],
+    connections:[],
+    serialMonitor:{ display:'terminal', newline:'lf' }
+  };
+}
+
+function collectProjectIncludes(){
+  syncActiveFile();
+  const headers = new Set();
+  const includeRe = /^\s*#\s*include\s*[<"]([^>"]+\.h)[>"]/gm;
+  projectFiles.forEach(file=>{
+    includeRe.lastIndex = 0;
+    let match;
+    while ((match = includeRe.exec(file.content)) !== null) headers.add(match[1]);
+  });
+  return headers;
+}
+
+function wokwiLibraryNames(){
+  const coreHeaders = new Set([
+    'Arduino.h','WiFi.h','WebServer.h','DNSServer.h','HTTPClient.h','Wire.h','SPI.h',
+    'EEPROM.h','SD.h','SoftwareSerial.h','pgmspace.h'
+  ]);
+  const byHeader = new Map(LIBS.map(lib=>[lib.header, lib.name.replace(/\s*\([^)]*\)\s*/g, '').trim()]));
+  const libs = new Set();
+  installedLibs.forEach(lib=>{
+    if (!coreHeaders.has(lib.header)) libs.add(lib.name.replace(/\s*\([^)]*\)\s*/g, '').trim());
+  });
+  collectProjectIncludes().forEach(header=>{
+    if (!coreHeaders.has(header) && byHeader.has(header)) libs.add(byHeader.get(header));
+  });
+  return [...libs].filter(Boolean).sort((a,b)=>a.localeCompare(b));
+}
+
+async function fetchArtifactBlob(url){
+  try {
+    const res = await fetch(url, { cache:'no-store' });
+    if (!res.ok) return null;
+    return await res.blob();
+  } catch(_){
+    return null;
+  }
+}
+
+async function addWokwiFirmware(zip){
+  const { board } = boardInfo();
+  if (isESP(board)){
+    const manifestBlob = await fetchArtifactBlob(latestManifestUrl || `${BUILDS}/manifest.json?t=${Date.now()}`);
+    if (manifestBlob){
+      try {
+        const manifest = JSON.parse(await manifestBlob.text());
+        const parts = manifest.builds?.[0]?.parts || [];
+        const merged = parts.find(part=>/merged/i.test(part.path));
+        const app = merged || parts.find(part=>/firmware|app/i.test(part.path));
+        if (app){
+          const blob = await fetchArtifactBlob(artifactUrl(app.path));
+          if (blob){
+            zip.file('firmware.bin', await blob.arrayBuffer());
+            return 'firmware.bin';
+          }
+        }
+      } catch(_){}
+    }
+    const fallback = await fetchArtifactBlob(`${BUILDS}/merged-firmware.bin?t=${Date.now()}`) ||
+      await fetchArtifactBlob(`${BUILDS}/firmware.bin?t=${Date.now()}`);
+    if (fallback){
+      zip.file('firmware.bin', await fallback.arrayBuffer());
+      return 'firmware.bin';
+    }
+    return '';
+  }
+
+  const hex = await fetchArtifactBlob(latestHexUrl || `${BUILDS}/firmware.hex?t=${Date.now()}`);
+  if (hex){
+    zip.file('firmware.hex', await hex.arrayBuffer());
+    return 'firmware.hex';
+  }
+  return '';
+}
+
+function tomlString(value){
+  return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+function wokwiToml(firmwarePath){
+  const lines = ['[wokwi]', 'version = 1'];
+  if (firmwarePath) lines.push(`firmware = ${tomlString(firmwarePath)}`);
+  lines.push('rfc2217ServerPort = 4000');
+  if (isESP(boardInfo().board)){
+    lines.push('', '[[net.forward]]', 'from = "localhost:8180"', 'to = "target:80"');
+  }
+  return lines.join('\n') + '\n';
+}
+
+async function exportWokwiZip(){
+  try {
+    const JSZipCtor = await ensureJSZip();
+    syncActiveFile();
+    const zip = new JSZipCtor();
+    projectFiles.forEach(file=> zip.file(file.name, file.content));
+    if (!projectFiles.some(file=>file.name === 'diagram.json')){
+      zip.file('diagram.json', JSON.stringify(wokwiDiagram(), null, 2));
+    }
+    const libs = wokwiLibraryNames();
+    if (libs.length) zip.file('libraries.txt', libs.join('\n') + '\n');
+    const firmwarePath = await addWokwiFirmware(zip);
+    zip.file('wokwi.toml', wokwiToml(firmwarePath));
+    downloadBlob(await zip.generateAsync({ type:'blob' }), 'wokwi-project.zip');
+    setStatus('✓ Wokwi ZIP exported', 'ok');
+    serialLog('Wokwi project ZIP exported', 'sys');
+  } catch(e){
+    setStatus('✗ Wokwi export failed', 'err');
+    serialLog('Wokwi export error: ' + e.message, 'sys');
+  }
+}
+
+function openWokwi(){
+  window.open(wokwiBoardInfo().newUrl, '_blank', 'noopener');
 }
 
 function downloadBlob(blob, filename){
@@ -1700,6 +1915,64 @@ function insertSecretsInclude(){
   setStatus('✓ secrets.h included', 'ok');
 }
 
+function getSmartWifiConfig(){
+  const timeout = Number(document.getElementById('smart-timeout')?.value || 12);
+  return {
+    enabled:Boolean(document.getElementById('smart-wifi-toggle')?.checked),
+    apSsid:document.getElementById('smart-ap-ssid')?.value.trim() || 'ESP32-Setup',
+    apPass:document.getElementById('smart-ap-pass')?.value || '',
+    portalTitle:document.getElementById('smart-portal-title')?.value.trim() || 'ESP32 Wi-Fi Setup',
+    accent:document.getElementById('smart-accent')?.value || '#00e676',
+    timeoutSeconds:Number.isFinite(timeout) ? Math.min(60, Math.max(3, timeout)) : 12
+  };
+}
+
+function applySmartWifiConfig(config){
+  const data = config || {};
+  const toggle = document.getElementById('smart-wifi-toggle');
+  const wizard = document.getElementById('smart-wifi-wizard');
+  if (toggle) toggle.checked = Boolean(data.enabled);
+  if (wizard) wizard.classList.toggle('open', Boolean(data.enabled));
+  document.getElementById('smart-ap-ssid').value = data.apSsid || 'ESP32-Setup';
+  document.getElementById('smart-ap-pass').value = data.apPass || '';
+  document.getElementById('smart-portal-title').value = data.portalTitle || 'ESP32 Wi-Fi Setup';
+  document.getElementById('smart-accent').value = /^#[0-9a-f]{6}$/i.test(data.accent || '') ? data.accent : '#00e676';
+  document.getElementById('smart-timeout').value = Number.isFinite(Number(data.timeoutSeconds)) ? Number(data.timeoutSeconds) : 12;
+  renderSmartWifiPreview();
+}
+
+function saveSmartWifiSettings(){
+  localStorage.setItem('smartWifiSettings', JSON.stringify(getSmartWifiConfig()));
+}
+
+function loadSmartWifiSettings(){
+  try {
+    applySmartWifiConfig(JSON.parse(localStorage.getItem('smartWifiSettings') || '{}'));
+  } catch(_){
+    applySmartWifiConfig({});
+  }
+}
+
+function toggleSmartWifi(enabled){
+  const wizard = document.getElementById('smart-wifi-wizard');
+  if (wizard) wizard.classList.toggle('open', Boolean(enabled));
+  saveSmartWifiSettings();
+  renderSmartWifiPreview();
+}
+
+function renderSmartWifiPreview(){
+  const preview = document.getElementById('smart-wifi-preview');
+  if (!preview) return;
+  const cfg = getSmartWifiConfig();
+  preview.innerHTML = `
+    <div class="smart-wifi-preview-head" style="background:${cfg.accent}">${cfg.portalTitle}</div>
+    <div class="smart-wifi-preview-body">
+      <div class="smart-wifi-preview-line"></div>
+      <div class="smart-wifi-preview-line short"></div>
+      <div class="smart-wifi-preview-button" style="background:${cfg.accent}"></div>
+    </div>`;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Board selector
 // ────────────────────────────────────────────────────────────────────────────
@@ -1807,6 +2080,7 @@ function onBoardChange(){
   document.getElementById('esp-section').style.display = esp ? '' : 'none';
   document.getElementById('partition-pane').style.display = esp ? '' : 'none';
   document.getElementById('esp-tools-pane').style.display = esp ? '' : 'none';
+  document.getElementById('smart-wifi-pane').style.display = esp ? '' : 'none';
   renderPinout();
   if (!esp){
     // arduino-web-uploader board attr: uno | nano | mega
@@ -1925,6 +2199,8 @@ async function compile(){
   const files = projectFiles
     .filter(f=>f.name !== mainFile.name)
     .map(f=>({ name:f.name, content:f.content }));
+  const smartWifi = getSmartWifiConfig();
+  smartWifi.enabled = smartWifi.enabled && isESP(board);
   const btn  = document.getElementById('compile-btn');
 
   btn.disabled = true;
@@ -1935,7 +2211,16 @@ async function compile(){
     const res  = await fetch(API, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ code, files, secrets:getSecrets(), board, fqbn, timestamp: new Date().toISOString() })
+      body: JSON.stringify({
+        code,
+        files,
+        secrets:getSecrets(),
+        smartWifi,
+        features:{ smartWifi:smartWifi.enabled },
+        board,
+        fqbn,
+        timestamp:new Date().toISOString()
+      })
     });
     const data = await res.json();
 
@@ -2001,7 +2286,7 @@ async function downloadHex(){
 }
 
 function artifactUrl(path){
-  return `${BUILDS}/${encodeURIComponent(path)}?t=${Date.now()}`;
+  return `${BUILDS}/${String(path).split('/').map(encodeURIComponent).join('/')}?t=${Date.now()}`;
 }
 
 function offsetName(offset){
@@ -2187,6 +2472,7 @@ function addSerialMacro(){
 
 document.addEventListener('DOMContentLoaded',()=>{
   loadSecrets();
+  loadSmartWifiSettings();
   setupProjectDropZone();
   updatePartitionEditor();
   renderFsFiles();
@@ -2272,7 +2558,12 @@ function renderInstalledBadges(){
   installedLibs.forEach(lib=>{
     const b = document.createElement('span');
     b.className = 'installed-badge';
-    b.innerHTML = `${lib.name} <button onclick="removeLib('${lib.header}')">✕</button>`;
+    b.append(document.createTextNode(lib.name + ' '));
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = '✕';
+    remove.onclick = ()=> removeLib(lib.header);
+    b.appendChild(remove);
     c.appendChild(b);
   });
 }
@@ -2284,13 +2575,35 @@ function renderLibGrid(list, gridId){
     const inst = isInstalled(lib.header);
     const card = document.createElement('div');
     card.className = 'lib-card' + (inst?' installed':'');
-    card.innerHTML = `
-      <span class="lib-toggle">${inst?'✅':'➕'}</span>
-      <div class="lib-name">${lib.name}</div>
-      <div class="lib-sub">${lib.header} · <span style="color:var(--blue)">${lib.tag}</span></div>`;
+    const toggle = document.createElement('span');
+    toggle.className = 'lib-toggle';
+    toggle.textContent = inst ? '✅' : '➕';
+    const name = document.createElement('div');
+    name.className = 'lib-name';
+    name.textContent = lib.name;
+    const sub = document.createElement('div');
+    sub.className = 'lib-sub';
+    sub.append(document.createTextNode(`${lib.header} · `));
+    const tag = document.createElement('span');
+    tag.style.color = 'var(--blue)';
+    tag.textContent = lib.tag;
+    sub.appendChild(tag);
+    card.append(toggle, name, sub);
     card.onclick = ()=> inst ? removeLib(lib.header) : addLib(lib);
     grid.appendChild(card);
   });
+}
+
+function restoreImportedLibs(libs){
+  const cleaned = libs.map(lib=>({
+    name:String(lib.name || '').slice(0, 80),
+    header:String(lib.header || '').replace(/[<>"'\\]/g, '').slice(0, 80),
+    tag:String(lib.tag || 'Custom').slice(0, 30)
+  })).filter(lib=>lib.name && /\.h$/i.test(lib.header));
+  cleaned.forEach(lib=>{
+    if (!isInstalled(lib.header)) installedLibs.push(lib);
+  });
+  saveLibs();
 }
 
 function addLib(lib){
@@ -2339,6 +2652,20 @@ function searchLibs(q){
   if (!res.length) grid.innerHTML='<div style="color:var(--muted);font-size:13px">No results — try Custom tab</div>';
 }
 
+async function firstHeaderInLibraryZip(file){
+  try {
+    const JSZipCtor = await ensureJSZip();
+    const zip = await JSZipCtor.loadAsync(file);
+    const headers = Object.values(zip.files)
+      .filter(entry=>!entry.dir && /\.h$/i.test(entry.name))
+      .map(entry=>sanitizeFileName(entry.name))
+      .filter(Boolean);
+    return headers.sort((a,b)=>a.length - b.length)[0] || '';
+  } catch(_){
+    return '';
+  }
+}
+
 // ZIP import — uploads to GitHub via API
 async function importZip(input){
   const file = input.files[0];
@@ -2348,6 +2675,9 @@ async function importZip(input){
   st.textContent = 'Uploading…';
 
   try {
+    const safeFileName = sanitizeFileName(file.name);
+    if (!/\.zip$/i.test(safeFileName)) throw new Error('Only .zip libraries are supported');
+    const detectedHeader = await firstHeaderInLibraryZip(file);
     const b64 = await new Promise((res,rej)=>{
       const r = new FileReader();
       r.onload = ()=> res(r.result.split(',')[1]);
@@ -2358,16 +2688,16 @@ async function importZip(input){
     const resp = await fetch('/api/upload-library', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ filename:file.name, content:b64 })
+      body: JSON.stringify({ filename:safeFileName, content:b64 })
     });
     const data = await resp.json();
     if (!data.success) throw new Error(data.error);
 
-    const name   = file.name.replace(/\.zip$/i,'');
-    const header = name + '.h';
+    const name   = safeFileName.replace(/\.zip$/i,'');
+    const header = detectedHeader || `${name}.h`;
     addLib({ name, header, tag:'Custom' });
     st.style.color = 'var(--green)';
-    st.textContent = `✓ ${file.name} uploaded & added`;
+    st.textContent = `✓ ${safeFileName} uploaded & added`;
   } catch(e){
     st.style.color = 'var(--red)';
     st.textContent = '✗ ' + e.message;
@@ -2379,6 +2709,7 @@ function addCustomInclude(){
   let val = document.getElementById('custom-include').value.trim();
   if (!val) return;
   let header = val.replace(/^#include\s*/i,'').replace(/[<>"]/g,'').trim();
+  header = header.replace(/\\/g, '/').split('/').pop().replace(/[^a-zA-Z0-9._-]/g, '_');
   if (!header.endsWith('.h')) header += '.h';
   const name = header.replace(/\.h$/,'');
   addLib({ name, header, tag:'Custom' });
