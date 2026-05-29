@@ -13,6 +13,10 @@ The app lets you write Arduino / ESP32 sketches in the browser, attach extra pro
 - Extra project files like `.h`, `.hpp`, `.cpp`, `.c`, `.ino`, `.txt`, and `.json`.
 - Library manager with common Arduino libraries.
 - ZIP library upload through the Vercel API.
+- Project ZIP export/import with board, library, and Smart Wi-Fi settings.
+- PWA install support with offline app shell caching.
+- Wokwi project export with `diagram.json`, `libraries.txt`, `wokwi.toml`, and optional latest firmware.
+- Smart Wi-Fi for ESP32: generated captive portal fallback when the board cannot connect to the configured network.
 - Live GitHub Actions build progress in the web UI.
 - AVR flashing through `arduino-web-uploader`.
 - ESP32 flashing through `esp-web-tools`.
@@ -128,6 +132,7 @@ If you fork or rename the project, update the repository name in:
 
 - `index.html`
 - `api/compile.js`
+- `api/status.js`
 - `api/upload-library.js`
 
 In `index.html`, update:
@@ -136,11 +141,19 @@ In `index.html`, update:
 const BUILDS = 'https://raw.githubusercontent.com/Narek-D8v/arduino-web-compiler/builds';
 ```
 
-In the API files, update:
+In the API files, the fallback values are:
 
 ```js
-const username = 'Narek-D8v';
-const repo = 'arduino-web-compiler';
+const REPO_OWNER = process.env.GITHUB_OWNER || 'Narek-D8v';
+const REPO_NAME = process.env.GITHUB_REPO || 'arduino-web-compiler';
+```
+
+You can also set these Vercel environment variables instead of editing the API files:
+
+```text
+GITHUB_OWNER
+GITHUB_REPO
+GITHUB_BRANCH
 ```
 
 ## How Compile Works
@@ -180,7 +193,7 @@ The web app supports extra files, similar to Wokwi-style projects.
 Supported file extensions in the workflow:
 
 ```text
-.h .hpp .hh .c .cpp .cc .ino .txt .json
+.h .hpp .hh .c .cpp .cc .ino .txt .json .csv
 ```
 
 Use `+ File` to create a new file in the browser, or `Attach` to add files from your computer.
@@ -243,6 +256,41 @@ For `.cpp` files, include Arduino types manually:
 ```
 
 The workflow intentionally ignores `Arduino.h` during library installation because it is provided by the selected Arduino core.
+
+## Smart Wi-Fi
+
+For ESP32 boards, enable `Smart Wi-Fi` in the Captive Portal Wizard before compiling.
+
+During GitHub Actions compilation, the workflow generates:
+
+```text
+smart_wifi.h
+secrets.h
+```
+
+It injects:
+
+```cpp
+#include "smart_wifi.h"
+SmartWiFi.begin();
+SmartWiFi.handle();
+```
+
+If the ESP32 cannot connect within the configured timeout, it starts a setup access point and captive portal. Credentials saved there are stored in ESP32 NVS through `Preferences`, then the board restarts and connects normally.
+
+## Wokwi
+
+Use `Wokwi ZIP` to export a simulation-ready project. The export includes:
+
+```text
+sketch.ino and attached project files
+diagram.json
+libraries.txt
+wokwi.toml
+firmware.hex or firmware.bin when the latest build artifact is available
+```
+
+`Open Wokwi` opens the matching Wokwi starter template for the selected board.
 
 ## Editor Diagnostics
 
