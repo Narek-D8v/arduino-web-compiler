@@ -1,7 +1,7 @@
 // Vercel Serverless Function for reading GitHub Actions build status.
 
-const username = 'Narek-D8v';
-const repo = 'arduino-web-compiler';
+const username = process.env.GITHUB_OWNER || 'Narek-D8v';
+const repo = process.env.GITHUB_REPO || 'arduino-web-compiler';
 const workflowFile = 'compile.yml';
 
 function setCors(res) {
