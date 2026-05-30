@@ -9,6 +9,7 @@
 <link rel="manifest" href="/site.webmanifest">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/fuse.js@7.1.0"></script>
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -3274,6 +3275,7 @@ function removeInclude(header){
 // ─────────────────────────────────────────────────────────────────────────────
 
 let _libIndex = null;          // массив { name, header, tag, sentence } после загрузки
+let _libFuse = null;
 let _libIndexLoading = false;  // флаг чтобы не качать дважды параллельно
 
 async function loadLibIndex(){
@@ -3354,6 +3356,15 @@ async function loadLibIndex(){
     }
 
     _libIndex = index;
+    _libFuse = new Fuse(index, {
+      includeScore: true,
+      threshold: 0.35,
+      keys: [
+        { name: 'name', weight: 0.6 },
+        { name: 'header', weight: 0.3 },
+        { name: 'sentence', weight: 0.1 }
+      ]
+    });
     _libIndexLoading = false;
     setStatus(`✓ ${index.length.toLocaleString()} libraries from Arduino Registry`);
     return _libIndex;
@@ -3369,93 +3380,46 @@ async function loadLibIndex(){
 // Вызывается при переключении на вкладку Search
 
 
-function searchLibs(q){
+function searchLibs(q) {
   const grid = document.getElementById('search-grid');
-  const query = q.trim().toLowerCase();
+  const query = q.trim();
 
   if (!query) {
-    grid.innerHTML = '<div style="color:var(--muted);font-size:13px">Type to search…</div>';
+    grid.innerHTML = '';
     return;
   }
 
-  // Если индекс ещё грузится — показываем заглушку и ждём
-  if (!_libIndex) {
-    grid.innerHTML = '<div style="color:var(--muted);font-size:13px">⏳ Loading index, please wait…</div>';
-    loadLibIndex().then(() => searchLibs(q));
+  if (!_libFuse) {
+    grid.innerHTML = '<div class="search-empty">Индекс поиска не загружен</div>';
     return;
   }
 
-  // ── Поиск с приоритетами ──────────────────────────────────────────────────
-  // Сначала точное совпадение по имени, потом startsWith, потом contains,
-  // потом совпадение по заголовку или описанию
-  const exact   = [];
-  const starts  = [];
-  const contains= [];
-  const other   = [];
-
-  for (const lib of _libIndex) {
-    const n = lib.name.toLowerCase();
-    const h = (lib.header || '').toLowerCase();
-    const s = (lib.sentence || '').toLowerCase();
-    const t = (lib.tag || '').toLowerCase();
-
-    if (n === query)                        exact.push(lib);
-    else if (n.startsWith(query))           starts.push(lib);
-    else if (n.includes(query) || h.includes(query)) contains.push(lib);
-    else if (s.includes(query) || t.includes(query)) other.push(lib);
-  }
-
-  const results = [...exact, ...starts, ...contains, ...other].slice(0, 50);
+  const results = _libFuse
+    .search(query)
+    .slice(0, 50)
+    .map(r => r.item);
 
   if (!results.length) {
-    grid.innerHTML = '<div style="color:var(--muted);font-size:13px">No results found</div>';
+    grid.innerHTML = '<div class="search-empty">Ничего не найдено</div>';
     return;
   }
 
-  // ── Рендерим карточки с описанием и версией ───────────────────────────────
-  grid.innerHTML = '';
-  results.forEach(lib => {
-    const inst = isInstalled(lib.header);
-    const card = document.createElement('div');
-    card.className = 'lib-card' + (inst ? ' installed' : '');
+  grid.innerHTML = results.map(lib => `
+    <div class="search-card" data-lib="${escapeHtml(lib.name)}">
+      <div class="search-card-title">${escapeHtml(lib.name)}</div>
+      <div class="search-card-sub">
+        ${escapeHtml(lib.header || '')}
+      </div>
+      <div class="search-card-desc">
+        ${escapeHtml(lib.sentence || '')}
+      </div>
+    </div>
+  `).join('');
 
-    const toggle = document.createElement('span');
-    toggle.className = 'lib-toggle';
-    toggle.textContent = inst ? '✅' : '➕';
-
-    const nameEl = document.createElement('div');
-    nameEl.className = 'lib-name';
-    nameEl.textContent = lib.name;
-
-    const sub = document.createElement('div');
-    sub.className = 'lib-sub';
-
-    // Показываем заголовок + категорию
-    const headerSpan = document.createTextNode(`${lib.header} · `);
-    const tagSpan = document.createElement('span');
-    tagSpan.style.color = 'var(--blue)';
-    tagSpan.textContent = lib.tag;
-    sub.append(headerSpan, tagSpan);
-
-    // Описание (sentence)
-    if (lib.sentence) {
-      const desc = document.createElement('div');
-      desc.style.cssText = 'font-size:10px;color:var(--muted);margin-top:3px;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical';
-      desc.textContent = lib.sentence;
-      sub.appendChild(desc);
-    }
-
-    // Версия
-    if (lib.version) {
-      const ver = document.createElement('div');
-      ver.style.cssText = 'font-size:10px;color:var(--muted);margin-top:2px';
-      ver.textContent = `v${lib.version}`;
-      sub.appendChild(ver);
-    }
-
-    card.append(toggle, nameEl, sub);
-    card.onclick = () => inst ? removeLib(lib.header) : addLib(lib);
-    grid.appendChild(card);
+  grid.querySelectorAll('.search-card').forEach(card => {
+    card.addEventListener('click', () => {
+      installLibrary(card.dataset.lib);
+    });
   });
 }
 
