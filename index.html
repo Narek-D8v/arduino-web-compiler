@@ -1467,19 +1467,362 @@ function wokwiBoardInfo(){
 
 function wokwiDiagram(){
   const info = wokwiBoardInfo();
+  const { board } = boardInfo();
+  const esp = isESP(board);
+
+  // ─────────────────────────────────────────────────────────────────
+  // ШАГ 1: собираем весь текст скетча из всех .ino файлов
+  // ─────────────────────────────────────────────────────────────────
+  syncActiveFile();
+  const sketchCode = projectFiles
+    .filter(f => /\.(ino|cpp|c)$/i.test(f.name))
+    .map(f => f.content)
+    .join('\n');
+
+  // Убираем строковые литералы и комментарии, чтобы не ловить
+  // ложные совпадения вроде Serial.println("pinMode(5, OUTPUT)")
+  const cleanCode = sketchCode
+    .replace(/\/\/[^\n]*/g, '')          // // однострочные комментарии
+    .replace(/\/\*[\s\S]*?\*\//g, '')    // /* блочные комментарии */
+    .replace(/"(?:[^"\\]|\\.)*"/g, '""') // строковые литералы
+    .replace(/'(?:[^'\\]|\\.)*'/g, "''");
+
+  // ─────────────────────────────────────────────────────────────────
+  // ШАГ 2: собираем все #include из ВСЕХ файлов (не только .ino)
+  // ─────────────────────────────────────────────────────────────────
+  const allCode = projectFiles.map(f => f.content).join('\n');
+  const includes = new Set();
+  const incRe = /^\s*#\s*include\s*[<"]([^>"]+)[>"]/gm;
+  let m;
+  while ((m = incRe.exec(allCode)) !== null) includes.add(m[1].toLowerCase());
+
+  // ─────────────────────────────────────────────────────────────────
+  // ШАГ 3: извлекаем пины из pinMode(), digitalWrite(), digitalRead(),
+  //         analogRead(), analogWrite(), tone(), attachInterrupt()
+  // Для каждого пина запоминаем режим: OUTPUT / INPUT / ANALOG_IN /
+  // ANALOG_OUT / PWM
+  // ─────────────────────────────────────────────────────────────────
+  const pinModes = {};   // { "13": "OUTPUT", "A0": "ANALOG_IN", ... }
+
+  // pinMode(pin, MODE)
+  const pinModeRe = /\bpinMode\s*\(\s*([A-Za-z0-9_]+)\s*,\s*(INPUT_PULLUP|INPUT|OUTPUT)\s*\)/g;
+  while ((m = pinModeRe.exec(cleanCode)) !== null) {
+    pinModes[m[1]] = m[2];
+  }
+
+  // analogRead(pin) → ANALOG_IN (если ещё не задан)
+  const analogReadRe = /\banalogRead\s*\(\s*([A-Za-z0-9_]+)\s*\)/g;
+  while ((m = analogReadRe.exec(cleanCode)) !== null) {
+    if (!pinModes[m[1]]) pinModes[m[1]] = 'ANALOG_IN';
+  }
+
+  // analogWrite(pin, ...) → PWM
+  const analogWriteRe = /\banalogWrite\s*\(\s*([A-Za-z0-9_]+)\s*,/g;
+  while ((m = analogWriteRe.exec(cleanCode)) !== null) {
+    if (!pinModes[m[1]]) pinModes[m[1]] = 'PWM';
+  }
+
+  // tone(pin, ...) → BUZZER
+  const toneRe = /\btone\s*\(\s*([A-Za-z0-9_]+)\s*,/g;
+  while ((m = toneRe.exec(cleanCode)) !== null) {
+    pinModes[m[1]] = 'BUZZER';
+  }
+
+  // digitalWrite(pin, ...) → OUTPUT (если ещё не задан)
+  const digWriteRe = /\bdigitalWrite\s*\(\s*([A-Za-z0-9_]+)\s*,/g;
+  while ((m = digWriteRe.exec(cleanCode)) !== null) {
+    if (!pinModes[m[1]]) pinModes[m[1]] = 'OUTPUT';
+  }
+
+  // digitalRead(pin) → INPUT (если ещё не задан)
+  const digReadRe = /\bdigitalRead\s*\(\s*([A-Za-z0-9_]+)\s*\)/g;
+  while ((m = digReadRe.exec(cleanCode)) !== null) {
+    if (!pinModes[m[1]]) pinModes[m[1]] = 'INPUT';
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // ШАГ 4: определяем наличие Serial / Serial.begin()
+  // ─────────────────────────────────────────────────────────────────
+  const hasSerial = /\bSerial\s*\./.test(cleanCode);
+
+  // ─────────────────────────────────────────────────────────────────
+  // ШАГ 5: определяем наличие I2C / SPI / Servo / DHT / и т.д.
+  //         на основе #include
+  // ─────────────────────────────────────────────────────────────────
+  const hasWire   = includes.has('wire.h');
+  const hasSPI    = includes.has('spi.h');
+  const hasServo  = includes.has('servo.h');
+  const hasDHT    = includes.has('dht.h') || includes.has('dht11.h') || includes.has('dht_u.h');
+  const hasLiqCrystal = includes.has('liquidcrystal.h') || includes.has('liquidcrystal_i2c.h');
+  const hasNeopixel   = includes.has('adafruit_neopixel.h') || includes.has('fastled.h');
+  const hasOLED   = includes.has('adafruit_ssd1306.h') || includes.has('u8g2lib.h') || includes.has('u8x8lib.h');
+  const hasBMP    = includes.has('adafruit_bmp280.h') || includes.has('adafruit_bmp085.h');
+  const hasMPU    = includes.has('mpu6050.h') || includes.has('adafruit_mpu6050.h');
+  const hasIR     = includes.has('irremote.h') || includes.has('irrecv.h');
+  const hasSD     = includes.has('sd.h');
+
+  // ─────────────────────────────────────────────────────────────────
+  // ШАГ 6: вспомогательные функции — маппинг имён пинов в Wokwi-формат
+  // ─────────────────────────────────────────────────────────────────
+
+  // Нормализуем имя пина: "LED_BUILTIN"→"13", "A0"→"A0", "2"→"D2" для ESP
+  function normPin(raw, forWokwi=false){
+    const s = String(raw).trim();
+    if (s === 'LED_BUILTIN') return esp ? 'D2' : '13';
+    if (/^A\d+$/.test(s)) return s;                    // A0..A5 — оставляем
+    const n = parseInt(s, 10);
+    if (!isNaN(n)){
+      if (esp && forWokwi) return `D${n}`;             // ESP32 Wokwi: D13
+      return String(n);                                 // AVR: 13
+    }
+    return s;
+  }
+
+  // Wokwi-имя пина платы для соединений
+  function boardPin(raw){
+    const norm = normPin(raw, true);
+    if (esp){
+      if (/^A\d+$/.test(norm)) return norm;            // A0, A1… (ESP32 ADC)
+      return norm;                                      // D2, D13…
+    } else {
+      // Arduino Uno / Nano / Mega
+      if (/^A\d+$/.test(norm)) return norm;
+      return `${norm}`;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // ШАГ 7: строим массив parts[] и connections[]
+  //         Раскладываем компоненты по сетке:
+  //         плата — слева (top=0, left=0)
+  //         компоненты — правее с шагом 130px по вертикали
+  // ─────────────────────────────────────────────────────────────────
+  const parts = [{
+    type: info.type,
+    id: 'board',
+    top: 0, left: 0,
+    attrs: info.attrs || {}
+  }];
+  const connections = [];
+  let yOff = 0;          // смещение по Y для следующего компонента
+  const COL = 300;       // X-координата компонентов
+  const STEP = 130;      // шаг по Y между компонентами
+
+  function addPart(type, id, attrs, top, left){
+    parts.push({ type, id, top: top ?? yOff, left: left ?? COL, attrs: attrs || {} });
+    if (top === undefined) yOff += STEP;
+  }
+
+  function conn(a, b, color='green'){
+    connections.push([a, b, color, '']);
+  }
+
+  // ── Serial Terminal ──────────────────────────────────────────────
+  // Если код использует Serial — добавляем wokwi-terminal
+  if (hasSerial){
+    addPart('wokwi-terminal', 'term', {}, yOff, COL);
+    yOff += 150;
+    // У ESP32 Serial идёт через USB, у AVR — через TX0/RX0
+    const tx = esp ? 'TX' : '1';
+    const rx = esp ? 'RX' : '0';
+    conn(`board:${tx}`, `term:RX`, 'green');
+    conn(`board:${rx}`, `term:TX`, 'green');
+  }
+
+  // ── I2C Bus ──────────────────────────────────────────────────────
+  // Wire.h → добавляем OLED по умолчанию если нет явного OLED-заголовка,
+  // иначе компонент добавится ниже
+  if (hasWire && !hasOLED && !hasBMP && !hasMPU && !hasLiqCrystal){
+    // Просто показываем заглушку I2C LCD
+    addPart('wokwi-lcd1602', 'lcd', { i2cAddress:'0x27', pins:'i2c' });
+    const sda = esp ? 'SDA' : 'A4';
+    const scl = esp ? 'SCL' : 'A5';
+    conn(`board:${sda}`, 'lcd:SDA', 'blue');
+    conn(`board:${scl}`, 'lcd:SCL', 'blue');
+    conn('board:GND.1', 'lcd:GND', 'black');
+    conn('board:5V',    'lcd:VCC', 'red');
+  }
+
+  // ── OLED SSD1306 ─────────────────────────────────────────────────
+  if (hasOLED){
+    addPart('wokwi-ssd1306', 'oled', {});
+    const sda = esp ? 'SDA' : 'A4';
+    const scl = esp ? 'SCL' : 'A5';
+    conn(`board:${sda}`, 'oled:SDA', 'blue');
+    conn(`board:${scl}`, 'oled:SCL', 'blue');
+    conn('board:GND.1',  'oled:GND', 'black');
+    conn('board:3.3V',   'oled:VCC', 'red');
+  }
+
+  // ── DHT Temperature Sensor ───────────────────────────────────────
+  if (hasDHT){
+    // Ищем пин DHT в коде: DHT dht(PIN, ...) или DHT11 dht(PIN)
+    let dhtPin = '2';
+    const dhtRe = /\bDHT\s*\w*\s*\(\s*([A-Za-z0-9_]+)\s*,/;
+    const dm = dhtRe.exec(cleanCode);
+    if (dm) dhtPin = normPin(dm[1]);
+    addPart('wokwi-dht22', 'dht', {});
+    conn(`board:${boardPin(dhtPin)}`, 'dht:SDA', 'green');
+    conn('board:GND.1', 'dht:GND', 'black');
+    conn('board:5V',    'dht:VCC', 'red');
+  }
+
+  // ── Servo ────────────────────────────────────────────────────────
+  if (hasServo){
+    // Servo myservo; myservo.attach(PIN)
+    const servoRe = /\.attach\s*\(\s*([A-Za-z0-9_]+)\s*[,)]/g;
+    const servoPins = [];
+    while ((m = servoRe.exec(cleanCode)) !== null) servoPins.push(normPin(m[1]));
+    const uniqueServos = [...new Set(servoPins)].slice(0, 4);
+    if (!uniqueServos.length) uniqueServos.push('9');
+    uniqueServos.forEach((pin, i) => {
+      const id = `servo${i}`;
+      addPart('wokwi-servo', id, {});
+      conn(`board:${boardPin(pin)}`, `${id}:PWM`, 'orange');
+      conn('board:GND.1', `${id}:GND`, 'black');
+      conn('board:5V',    `${id}:V+`,  'red');
+    });
+  }
+
+  // ── NeoPixel / FastLED ───────────────────────────────────────────
+  if (hasNeopixel){
+    // Adafruit_NeoPixel strip(NUM, PIN, ...)
+    let npPin = '6'; let npCount = 8;
+    const npRe = /Adafruit_NeoPixel\s+\w+\s*\(\s*(\d+)\s*,\s*([A-Za-z0-9_]+)/;
+    const npm = npRe.exec(cleanCode);
+    if (npm){ npCount = Math.min(parseInt(npm[1])||8, 32); npPin = normPin(npm[2]); }
+    // FastLED.addLeds<...>(leds, NUM)  — ищем DATA_PIN
+    const flRe = /DATA_PIN\s*=\s*([A-Za-z0-9_]+)/;
+    const flm = flRe.exec(cleanCode);
+    if (flm) npPin = normPin(flm[1]);
+    addPart('wokwi-neopixel-matrix', 'pixels', { cols: String(npCount), rows:'1' });
+    conn(`board:${boardPin(npPin)}`, 'pixels:DIN', 'green');
+    conn('board:GND.1', 'pixels:GND', 'black');
+    conn('board:5V',    'pixels:VCC', 'red');
+  }
+
+  // ── LCD 16x2 (параллельный, LiquidCrystal) ───────────────────────
+  if (hasLiqCrystal && !hasWire){
+    // LiquidCrystal lcd(RS, EN, D4, D5, D6, D7)
+    let rs='12', en='11', d4='5', d5='4', d6='3', d7='2';
+    const lcRe = /LiquidCrystal\s+\w+\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/;
+    const lcm = lcRe.exec(cleanCode);
+    if (lcm){ rs=lcm[1]; en=lcm[2]; d4=lcm[3]; d5=lcm[4]; d6=lcm[5]; d7=lcm[6]; }
+    addPart('wokwi-lcd1602', 'lcd', {});
+    conn(`board:${boardPin(rs)}`, 'lcd:RS', 'purple');
+    conn(`board:${boardPin(en)}`, 'lcd:E',  'purple');
+    conn(`board:${boardPin(d4)}`, 'lcd:D4', 'blue');
+    conn(`board:${boardPin(d5)}`, 'lcd:D5', 'blue');
+    conn(`board:${boardPin(d6)}`, 'lcd:D6', 'blue');
+    conn(`board:${boardPin(d7)}`, 'lcd:D7', 'blue');
+    conn('board:GND.1', 'lcd:GND', 'black');
+    conn('board:5V',    'lcd:VCC', 'red');
+  }
+
+  // ── MPU-6050 (гироскоп/акселерометр) ────────────────────────────
+  if (hasMPU){
+    addPart('wokwi-mpu6050', 'mpu', {});
+    const sda = esp ? 'SDA' : 'A4';
+    const scl = esp ? 'SCL' : 'A5';
+    conn(`board:${sda}`, 'mpu:SDA', 'blue');
+    conn(`board:${scl}`, 'mpu:SCL', 'blue');
+    conn('board:GND.1',  'mpu:GND', 'black');
+    conn('board:3.3V',   'mpu:VCC', 'red');
+  }
+
+  // ── BMP280 (давление/температура) ────────────────────────────────
+  if (hasBMP){
+    addPart('wokwi-bmp280', 'bmp', {});
+    const sda = esp ? 'SDA' : 'A4';
+    const scl = esp ? 'SCL' : 'A5';
+    conn(`board:${sda}`, 'bmp:SDA', 'blue');
+    conn(`board:${scl}`, 'bmp:SCL', 'blue');
+    conn('board:GND.1',  'bmp:GND', 'black');
+    conn('board:3.3V',   'bmp:VCC', 'red');
+  }
+
+  // ── IR Receiver ──────────────────────────────────────────────────
+  if (hasIR){
+    let irPin = '11';
+    // IRrecv irrecv(PIN)
+    const irRe = /IRrecv\s+\w+\s*\(\s*([A-Za-z0-9_]+)\s*\)/;
+    const irm = irRe.exec(cleanCode);
+    if (irm) irPin = normPin(irm[1]);
+    addPart('wokwi-ir-receiver', 'ir', {});
+    conn(`board:${boardPin(irPin)}`, 'ir:OUT', 'green');
+    conn('board:GND.1', 'ir:GND', 'black');
+    conn('board:5V',    'ir:VCC', 'red');
+  }
+
+  // ── GPIO пины — LED / Button / Potentiometer ─────────────────────
+  // Проходим по всем найденным пинам, исключаем уже использованные
+  // библиотечными компонентами, и добавляем простые компоненты
+  const usedPins = new Set();
+
+  // Пины, занятые Serial на AVR
+  if (hasSerial && !esp){ usedPins.add('0'); usedPins.add('1'); }
+  // I2C пины
+  if (hasWire || hasOLED || hasBMP || hasMPU || hasLiqCrystal){
+    if (esp){ usedPins.add('SDA'); usedPins.add('SCL'); }
+    else { usedPins.add('A4'); usedPins.add('A5'); }
+  }
+
+  let gpioIdx = 0;
+  for (const [pin, mode] of Object.entries(pinModes)){
+    const norm = normPin(pin);
+    if (usedPins.has(norm) || usedPins.has(pin)) continue;
+    if (pin === 'LED_BUILTIN') continue; // встроенный LED не добавляем
+    usedPins.add(norm);
+
+    const bp = boardPin(pin);
+
+    if (mode === 'OUTPUT' || mode === 'PWM'){
+      // OUTPUT → LED + резистор
+      const id = `led${gpioIdx}`;
+      addPart('wokwi-led', id, { color:'red' });
+      const rid = `r${gpioIdx}`;
+      addPart('wokwi-resistor', rid, { value:'220' }, yOff - STEP, COL + 80);
+      conn(`board:${bp}`,  `${rid}:1`, 'green');
+      conn(`${rid}:2`,     `${id}:A`,  'green');
+      conn(`board:GND.1`,  `${id}:K`,  'black');
+      gpioIdx++;
+
+    } else if (mode === 'BUZZER'){
+      const id = `buz${gpioIdx}`;
+      addPart('wokwi-buzzer', id, {});
+      conn(`board:${bp}`, `${id}:1`, 'green');
+      conn(`board:GND.1`, `${id}:2`, 'black');
+      gpioIdx++;
+
+    } else if (mode === 'INPUT' || mode === 'INPUT_PULLUP'){
+      // INPUT → кнопка
+      const id = `btn${gpioIdx}`;
+      addPart('wokwi-pushbutton', id, {});
+      conn(`board:${bp}`, `${id}:1.l`, 'green');
+      conn(`board:GND.1`, `${id}:2.l`, 'black');
+      gpioIdx++;
+
+    } else if (mode === 'ANALOG_IN'){
+      // analogRead → потенциометр
+      const id = `pot${gpioIdx}`;
+      addPart('wokwi-potentiometer', id, {});
+      conn(`board:${bp}`, `${id}:SIG`, 'green');
+      conn(`board:GND.1`, `${id}:GND`, 'black');
+      conn('board:5V',    `${id}:VCC`, 'red');
+      gpioIdx++;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Финал: возвращаем готовый diagram.json
+  // ─────────────────────────────────────────────────────────────────
   return {
-    version:1,
-    author:'Arduino Cloud IDE',
-    editor:'wokwi',
-    parts:[{
-      type:info.type,
-      id:'board',
-      top:0,
-      left:0,
-      attrs:info.attrs || {}
-    }],
-    connections:[],
-    serialMonitor:{ display:'terminal', newline:'lf' }
+    version: 1,
+    author: 'Arduino Cloud IDE',
+    editor: 'wokwi',
+    parts,
+    connections,
+    serialMonitor: { display: 'terminal', newline: 'lf' }
   };
 }
 
