@@ -487,7 +487,8 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
 
       <!-- Search tab -->
       <div id="tab-search" style="display:none">
-        <input id="lib-search" placeholder="Search libraries…" oninput="searchLibs(this.value)">
+        <input id="lib-search" placeholder="Search 5000+ Arduino libraries…" oninput="searchLibs(this.value)">
+        <div id="lib-index-status" style="font-size:11px;color:var(--muted);margin-bottom:10px;min-height:16px"></div>
         <div class="lib-grid" id="search-grid"></div>
       </div>
 
@@ -1839,19 +1840,164 @@ function collectProjectIncludes(){
 }
 
 function wokwiLibraryNames(){
-  const coreHeaders = new Set([
-    'Arduino.h','WiFi.h','WebServer.h','DNSServer.h','HTTPClient.h','Wire.h','SPI.h',
-    'EEPROM.h','SD.h','SoftwareSerial.h','pgmspace.h'
+  // ─────────────────────────────────────────────────────────────────
+  // Таблица: header (нижний регистр) → точное название в Wokwi registry
+  // Источник: https://wokwi.com/libraries
+  // Заголовки, которых здесь нет — либо встроены в платформу,
+  // либо не поддерживаются Wokwi и будут проигнорированы.
+  // ─────────────────────────────────────────────────────────────────
+  const WOKWI_LIBS = {
+    // ── Actuators ──────────────────────────────────────────────────
+    'servo.h':                  'Servo',
+    'accelstepper.h':           'AccelStepper',
+    'stepper.h':                'Stepper',
+
+    // ── LED / Light ────────────────────────────────────────────────
+    'adafruit_neopixel.h':      'Adafruit NeoPixel',
+    'fastled.h':                'FastLED',
+
+    // ── Sensors ────────────────────────────────────────────────────
+    'dht.h':                    'DHT sensor library',
+    'dht11.h':                  'DHT sensor library',
+    'dht_u.h':                  'DHT sensor library',
+    'onewire.h':                'OneWire',
+    'dallastemperature.h':      'DallasTemperature',
+    'mpu6050.h':                'MPU6050',
+    'adafruit_mpu6050.h':       'Adafruit MPU6050',
+    'adafruit_bmp280.h':        'Adafruit BMP280 Library',
+    'adafruit_bmp085.h':        'Adafruit BMP085 Library',
+    'adafruit_bme280.h':        'Adafruit BME280 Library',
+    'adafruit_hcsr04.h':        'HCSR04',
+    'ultrasonic.h':             'Ultrasonic',
+    'newping.h':                'NewPing',
+    'adafruit_si7021.h':        'Adafruit Si7021 Library',
+    'adafruit_ads1x15.h':       'Adafruit ADS1X15',
+    'adafruit_ina219.h':        'Adafruit INA219',
+    'max6675.h':                'MAX6675 library',
+
+    // ── Display ────────────────────────────────────────────────────
+    'liquidcrystal.h':          'LiquidCrystal',
+    'liquidcrystal_i2c.h':      'LiquidCrystal I2C',
+    'adafruit_ssd1306.h':       'Adafruit SSD1306',
+    'adafruit_gfx.h':           'Adafruit GFX Library',
+    'u8g2lib.h':                'U8g2',
+    'u8x8lib.h':                'U8g2',
+    'tft_espi.h':               'TFT_eSPI',
+    'adafruit_st7735.h':        'Adafruit ST7735 and ST7789 Library',
+    'adafruit_ili9341.h':       'Adafruit ILI9341',
+    'max7219.h':                'MD_MAX72XX',
+    'md_max72xx.h':             'MD_MAX72XX',
+    'md_parola.h':              'MD_Parola',
+
+    // ── Data / Protocol ────────────────────────────────────────────
+    'arduinojson.h':            'ArduinoJson',
+    'pubsubclient.h':           'PubSubClient',
+    'irremote.h':               'IRremote',
+    'irrreceiver.h':            'IRremote',
+    'rf24.h':                   'RF24',
+    'mfrc522.h':                'MFRC522',
+    'tinygps++.h':              'TinyGPSPlus',
+    'tinygps.h':                'TinyGPS',
+
+    // ── Input ──────────────────────────────────────────────────────
+    'keypad.h':                 'Keypad',
+    'bounce2.h':                'Bounce2',
+    'encoder.h':                'Encoder',
+    'rotaryencoder.h':          'RotaryEncoder',
+
+    // ── Timing / Utils ─────────────────────────────────────────────
+    'timerone.h':               'TimerOne',
+    'elapsedmillis.h':          'elapsedMillis',
+    'taskscheduler.h':          'TaskScheduler',
+
+    // ── Storage ────────────────────────────────────────────────────
+    'preferences.h':            'Preferences',      // ESP32 built-in, но Wokwi требует явно
+    'littlefs.h':               'LittleFS_esp32',
+    'spiffs.h':                 'SPIFFS',
+
+    // ── Audio ──────────────────────────────────────────────────────
+    'toneac.h':                 'toneAC',
+    'pcm.h':                    'PCM',
+
+    // ── Math / DSP ─────────────────────────────────────────────────
+    'filters.h':                'Filters',
+  };
+
+  // ─────────────────────────────────────────────────────────────────
+  // Заголовки, которые реально встроены в платформу Arduino/ESP32
+  // и НЕ нужно указывать в libraries.txt — Wokwi их знает сам.
+  // BLE заголовки сюда НЕ входят — в Wokwi их нужно указывать явно.
+  // ─────────────────────────────────────────────────────────────────
+  const CORE_HEADERS = new Set([
+    // Arduino core
+    'arduino.h','wiring.h','pins_arduino.h',
+    'avr/pgmspace.h','avr/interrupt.h','avr/io.h',
+    'pgmspace.h',
+    // C stdlib
+    'math.h','string.h','stdlib.h','stdio.h','stdint.h',
+    'stdbool.h','stddef.h','limits.h',
+    // ESP32 low-level (не библиотеки, а системные заголовки)
+    'freertos/freertos.h','freertos/task.h','freertos/queue.h',
+    'freertos/semphr.h','freertos/timers.h',
+    'esp_system.h','esp_wifi.h','esp_event.h','esp_log.h',
+    'esp_err.h','esp_attr.h','esp_intr_alloc.h',
+    'nvs_flash.h','nvs.h',
+    'driver/gpio.h','driver/uart.h','driver/i2c.h','driver/spi_master.h',
+    'soc/gpio_struct.h',
+    // ESP32 Arduino-обёртки — встроены в платформу
+    'wifi.h','webserver.h','dnsserver.h','httpclient.h',
+    'wire.h','spi.h','eeprom.h','softwareserial.h',
+    'update.h','esp_ota_ops.h',
   ]);
-  const byHeader = new Map(LIBS.map(lib=>[lib.header, lib.name.replace(/\s*\([^)]*\)\s*/g, '').trim()]));
-  const libs = new Set();
-  installedLibs.forEach(lib=>{
-    if (!coreHeaders.has(lib.header)) libs.add(lib.name.replace(/\s*\([^)]*\)\s*/g, '').trim());
+
+  const result = new Set();
+
+  // ─────────────────────────────────────────────────────────────────
+  // Источник 1: заголовки из кода проекта
+  // Приоритет: WOKWI_LIBS → если нет, fallback по имени файла
+  // ─────────────────────────────────────────────────────────────────
+  collectProjectIncludes().forEach(header => {
+    const key = header.toLowerCase();
+
+    // Встроенная системная — пропускаем
+    if (CORE_HEADERS.has(key)) return;
+
+    // Есть точное Wokwi-имя → берём его
+    const wokwiName = WOKWI_LIBS[key];
+    if (wokwiName) {
+      result.add(wokwiName);
+      return;
+    }
+
+    // Нет в таблице — добавляем имя файла без расширения как fallback.
+    // Это позволяет BLEDevice.h → "BLEDevice", MyLib.h → "MyLib" и т.д.
+    // Wokwi попробует найти библиотеку с таким именем.
+    // Пути типа "freertos/task.h" уже отсечены выше через CORE_HEADERS,
+    // но на всякий случай пропускаем всё что содержит слеш.
+    if (header.includes('/') || header.includes('\\')) return;
+
+    const fallbackName = header.replace(/\.h$/i, '');
+    result.add(fallbackName);
   });
-  collectProjectIncludes().forEach(header=>{
-    if (!coreHeaders.has(header) && byHeader.has(header)) libs.add(byHeader.get(header));
+
+  // ─────────────────────────────────────────────────────────────────
+  // Источник 2: библиотеки, установленные через Library Manager
+  // ─────────────────────────────────────────────────────────────────
+  installedLibs.forEach(lib => {
+    const key = (lib.header || '').toLowerCase();
+    if (CORE_HEADERS.has(key)) return;
+
+    const wokwiName = WOKWI_LIBS[key];
+    if (wokwiName) {
+      result.add(wokwiName);
+    } else {
+      // Кастомные или неизвестные — берём имя как есть (без скобок)
+      const cleanName = lib.name.replace(/\s*\([^)]*\)\s*/g, '').trim();
+      if (cleanName) result.add(cleanName);
+    }
   });
-  return [...libs].filter(Boolean).sort((a,b)=>a.localeCompare(b));
+
+  return [...result].sort((a, b) => a.localeCompare(b));
 }
 
 async function fetchArtifactBlob(url){
@@ -1981,12 +2127,13 @@ async function exportWokwiZip(){
     }
 
     // 3. libraries.txt
+    // Всегда добавляем файл — даже пустой Wokwi примет без ошибок.
+    // wokwiLibraryNames() возвращает точные имена из реестра Wokwi,
+    // полученные из #include заголовков скетча.
     const libs = wokwiLibraryNames();
-    if (libs.length) {
-      data['libraries.txt'] = strToU8(
-        libs.join('\n') + '\n'
-      );
-    }
+    data['libraries.txt'] = strToU8(
+      libs.length ? libs.join('\n') + '\n' : '# No extra libraries\n'
+    );
 
     // 4. firmware
     const firmware = await addWokwiFirmware();
@@ -3017,6 +3164,13 @@ function switchLibTab(name, btn){
   document.querySelectorAll('.lib-tab').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+name).style.display='';
   btn.classList.add('active');
+  // При открытии вкладки Search — запускаем загрузку индекса
+  if (name === 'search') {
+    loadLibIndex().then(() => {
+      const q = document.getElementById('lib-search').value;
+      if (q.trim()) searchLibs(q);
+    });
+  }
 }
 
 function isInstalled(header){ return installedLibs.some(l=>l.header===header); }
@@ -3113,16 +3267,196 @@ function removeInclude(header){
   editor.setValue(editor.getValue().split('\n').filter(l=>l.trim()!==line).join('\n'));
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Arduino Library Registry Index (~5000 libraries)
+// Загружается один раз при открытии вкладки Search, кэшируется в localStorage
+// на 24 часа чтобы не качать при каждом открытии.
+// ─────────────────────────────────────────────────────────────────────────────
+
+let _libIndex = null;          // массив { name, header, tag, sentence } после загрузки
+let _libIndexLoading = false;  // флаг чтобы не качать дважды параллельно
+
+async function loadLibIndex(){
+  // Уже загружен — ничего не делаем
+  if (_libIndex) return _libIndex;
+  // Уже грузится — ждём
+  if (_libIndexLoading) {
+    await new Promise(r => { const t = setInterval(()=>{ if(!_libIndexLoading){clearInterval(t);r();} }, 100); });
+    return _libIndex;
+  }
+
+  _libIndexLoading = true;
+  const statusEl = document.getElementById('lib-index-status');
+  const setStatus = msg => { if (statusEl) statusEl.textContent = msg; };
+
+  // ── Проверяем кэш (localStorage) ──────────────────────────────────────────
+  try {
+    const cached = localStorage.getItem('_libIndexCache');
+    if (cached) {
+      const { ts, data } = JSON.parse(cached);
+      // Кэш живёт 24 часа
+      if (Date.now() - ts < 86400000 && Array.isArray(data) && data.length > 100) {
+        _libIndex = data;
+        _libIndexLoading = false;
+        setStatus(`✓ ${data.length.toLocaleString()} libraries loaded (cached)`);
+        return _libIndex;
+      }
+    }
+  } catch(_){}
+
+  // ── Скачиваем свежий индекс ───────────────────────────────────────────────
+  setStatus('⏳ Loading library index…');
+  try {
+    // Официальный Arduino library index в gzip-JSON формате
+    const res = await fetch(
+      '/api/lib-index',
+      { cache: 'no-store' }
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    // Распаковываем gzip прямо в браузере через DecompressionStream
+    setStatus('⏳ Decompressing…');
+    const ds = new DecompressionStream('gzip');
+    const decompressed = res.body.pipeThrough(ds);
+    const text = await new Response(decompressed).text();
+
+    setStatus('⏳ Parsing…');
+    const json = JSON.parse(text);
+
+    // ── Строим плоский массив нужных полей ────────────────────────────────
+    // json.libraries — массив объектов с полями:
+    //   name, sentence, paragraph, url, category, architectures,
+    //   types, versions[{version, url}], headers
+    const index = [];
+    for (const lib of json.libraries || []) {
+      // Берём последнюю версию (они идут от старых к новым)
+      const latest = lib.versions?.[lib.versions.length - 1];
+      if (!latest) continue;
+
+      // Основной заголовок — берём первый из списка или строим из имени
+      const header = (latest.includes?.[0]) ||
+                     (lib.name.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'') + '.h');
+
+      index.push({
+        name:     lib.name,
+        header:   header,
+        tag:      lib.category || 'Other',
+        sentence: (lib.sentence || '').slice(0, 120),
+        version:  latest.version || '',
+      });
+    }
+
+    // Кэшируем в localStorage
+    try {
+      localStorage.setItem('_libIndexCache', JSON.stringify({ ts: Date.now(), data: index }));
+    } catch(_){
+      // localStorage мог переполниться — не критично
+    }
+
+    _libIndex = index;
+    _libIndexLoading = false;
+    setStatus(`✓ ${index.length.toLocaleString()} libraries from Arduino Registry`);
+    return _libIndex;
+
+  } catch(err) {
+    _libIndexLoading = false;
+    setStatus(`⚠ Could not load registry: ${err.message} — searching built-in list`);
+    _libIndex = LIBS;   // fallback на встроенный список
+    return _libIndex;
+  }
+}
+
+// Вызывается при переключении на вкладку Search
+
+
 function searchLibs(q){
   const grid = document.getElementById('search-grid');
-  if (!q.trim()){ grid.innerHTML='<div style="color:var(--muted);font-size:13px">Type to search…</div>'; return; }
-  const res = LIBS.filter(l=>
-    l.name.toLowerCase().includes(q.toLowerCase()) ||
-    l.header.toLowerCase().includes(q.toLowerCase()) ||
-    l.tag.toLowerCase().includes(q.toLowerCase())
-  );
-  renderLibGrid(res.length ? res : [], 'search-grid');
-  if (!res.length) grid.innerHTML='<div style="color:var(--muted);font-size:13px">No results — try Custom tab</div>';
+  const query = q.trim().toLowerCase();
+
+  if (!query) {
+    grid.innerHTML = '<div style="color:var(--muted);font-size:13px">Type to search…</div>';
+    return;
+  }
+
+  // Если индекс ещё грузится — показываем заглушку и ждём
+  if (!_libIndex) {
+    grid.innerHTML = '<div style="color:var(--muted);font-size:13px">⏳ Loading index, please wait…</div>';
+    loadLibIndex().then(() => searchLibs(q));
+    return;
+  }
+
+  // ── Поиск с приоритетами ──────────────────────────────────────────────────
+  // Сначала точное совпадение по имени, потом startsWith, потом contains,
+  // потом совпадение по заголовку или описанию
+  const exact   = [];
+  const starts  = [];
+  const contains= [];
+  const other   = [];
+
+  for (const lib of _libIndex) {
+    const n = lib.name.toLowerCase();
+    const h = (lib.header || '').toLowerCase();
+    const s = (lib.sentence || '').toLowerCase();
+    const t = (lib.tag || '').toLowerCase();
+
+    if (n === query)                        exact.push(lib);
+    else if (n.startsWith(query))           starts.push(lib);
+    else if (n.includes(query) || h.includes(query)) contains.push(lib);
+    else if (s.includes(query) || t.includes(query)) other.push(lib);
+  }
+
+  const results = [...exact, ...starts, ...contains, ...other].slice(0, 50);
+
+  if (!results.length) {
+    grid.innerHTML = '<div style="color:var(--muted);font-size:13px">No results found</div>';
+    return;
+  }
+
+  // ── Рендерим карточки с описанием и версией ───────────────────────────────
+  grid.innerHTML = '';
+  results.forEach(lib => {
+    const inst = isInstalled(lib.header);
+    const card = document.createElement('div');
+    card.className = 'lib-card' + (inst ? ' installed' : '');
+
+    const toggle = document.createElement('span');
+    toggle.className = 'lib-toggle';
+    toggle.textContent = inst ? '✅' : '➕';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'lib-name';
+    nameEl.textContent = lib.name;
+
+    const sub = document.createElement('div');
+    sub.className = 'lib-sub';
+
+    // Показываем заголовок + категорию
+    const headerSpan = document.createTextNode(`${lib.header} · `);
+    const tagSpan = document.createElement('span');
+    tagSpan.style.color = 'var(--blue)';
+    tagSpan.textContent = lib.tag;
+    sub.append(headerSpan, tagSpan);
+
+    // Описание (sentence)
+    if (lib.sentence) {
+      const desc = document.createElement('div');
+      desc.style.cssText = 'font-size:10px;color:var(--muted);margin-top:3px;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical';
+      desc.textContent = lib.sentence;
+      sub.appendChild(desc);
+    }
+
+    // Версия
+    if (lib.version) {
+      const ver = document.createElement('div');
+      ver.style.cssText = 'font-size:10px;color:var(--muted);margin-top:2px';
+      ver.textContent = `v${lib.version}`;
+      sub.appendChild(ver);
+    }
+
+    card.append(toggle, nameEl, sub);
+    card.onclick = () => inst ? removeLib(lib.header) : addLib(lib);
+    grid.appendChild(card);
+  });
 }
 
 async function firstHeaderInLibraryZip(file){
