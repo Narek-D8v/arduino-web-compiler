@@ -1563,20 +1563,48 @@ function wokwiToml(firmwarePath){
 
 async function exportWokwiZip(){
   try {
-    const JSZipCtor = await ensureJSZip();
+    const { zipSync, strToU8 } = window.fflate;
+
     syncActiveFile();
-    const zip = new JSZipCtor();
-    projectFiles.forEach(file=> zip.file(file.name, file.content));
-    if (!projectFiles.some(file=>file.name === 'diagram.json')){
-      zip.file('diagram.json', JSON.stringify(wokwiDiagram(), null, 2));
+
+    const data = {};
+
+    // 1. project files
+    projectFiles.forEach(file => {
+      data[file.name] = strToU8(file.content);
+    });
+
+    // 2. diagram.json
+    if (!projectFiles.some(file => file.name === 'diagram.json')) {
+      data['diagram.json'] = strToU8(
+        JSON.stringify(wokwiDiagram(), null, 2)
+      );
     }
+
+    // 3. libraries.txt
     const libs = wokwiLibraryNames();
-    if (libs.length) zip.file('libraries.txt', libs.join('\n') + '\n');
-    const firmwarePath = await addWokwiFirmware(zip);
-    zip.file('wokwi.toml', wokwiToml(firmwarePath));
-    downloadBlob(await zip.generateAsync({ type:'blob' }), 'wokwi-project.zip');
+    if (libs.length) {
+      data['libraries.txt'] = strToU8(libs.join('\n') + '\n');
+    }
+
+    // 4. firmware (ВАЖНО: async функция)
+    const firmwarePath = await addWokwiFirmwareToObject(data);
+
+    // 5. wokwi.toml
+    data['wokwi.toml'] = strToU8(wokwiToml(firmwarePath));
+
+    // 6. ZIP
+    const zipped = zipSync(data);
+
+    const blob = new Blob([zipped], {
+      type: 'application/zip'
+    });
+
+    downloadBlob(blob, 'wokwi-project.zip');
+
     setStatus('✓ Wokwi ZIP exported', 'ok');
     serialLog('Wokwi project ZIP exported', 'sys');
+
   } catch(e){
     setStatus('✗ Wokwi export failed', 'err');
     serialLog('Wokwi export error: ' + e.message, 'sys');
