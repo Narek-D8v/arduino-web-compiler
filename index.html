@@ -510,7 +510,12 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
 
 <!-- Scripts -->
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script type="module">
+import { zipSync, unzipSync, strToU8, strFromU8 } 
+from "https://cdn.jsdelivr.net/npm/fflate/esm/browser.js";
+
+window.fflate = { zipSync, unzipSync, strToU8, strFromU8 };
+</script>
 <script src="https://github.com/dbuezas/arduino-web-uploader/releases/download/v1.1.2/main.js"></script>
 
 <script>
@@ -1334,21 +1339,36 @@ async function restoreSharedProject(){
 
 async function exportProjectZip(){
   try {
-    const JSZipCtor = await ensureJSZip();
+    const { zipSync, strToU8 } = window.fflate;
+
     syncActiveFile();
-    const zip = new JSZipCtor();
-    projectFiles.forEach(file=> zip.file(file.name, file.content));
-    zip.file('project.json', JSON.stringify({
-      version:1,
-      board:document.getElementById('board-sel').value,
-      libs:installedLibs,
-      smartWifi:getSmartWifiConfig(),
-      exportedAt:new Date().toISOString()
+
+    const data = {};
+
+    // файлы проекта
+    projectFiles.forEach(file => {
+      data[file.name] = strToU8(file.content);
+    });
+
+    // project.json
+    data['project.json'] = strToU8(JSON.stringify({
+      version: 1,
+      board: document.getElementById('board-sel').value,
+      libs: installedLibs,
+      smartWifi: getSmartWifiConfig(),
+      exportedAt: new Date().toISOString()
     }, null, 2));
-    const blob = await zip.generateAsync({ type:'blob' });
+
+    // ZIP
+    const zipped = zipSync(data);
+
+    const blob = new Blob([zipped], { type: 'application/zip' });
+
     downloadBlob(blob, 'arduino-project.zip');
+
     setStatus('✓ ZIP exported', 'ok');
     serialLog('Project ZIP exported', 'sys');
+
   } catch(e){
     setStatus('✗ ZIP export failed', 'err');
     serialLog('ZIP export error: ' + e.message, 'sys');
@@ -1357,37 +1377,64 @@ async function exportProjectZip(){
 
 async function importProjectZip(file){
   if (!file) return;
+
   try {
-    const JSZipCtor = await ensureJSZip();
-    const zip = await JSZipCtor.loadAsync(file);
+    const { unzipSync, strFromU8 } = window.fflate;
+
+    const buf = await file.arrayBuffer();
+    const unzipped = unzipSync(new Uint8Array(buf));
+
     const loaded = [];
     let board = '';
-    for (const entry of Object.values(zip.files)){
-      if (entry.dir) continue;
-      const cleanName = sanitizeFileName(entry.name);
+
+    for (const [name, data] of Object.entries(unzipped)) {
+
+      const cleanName = sanitizeFileName(name);
       if (!cleanName) continue;
-      if (cleanName === 'project.json'){
+
+      const content = strFromU8(data);
+
+      // project.json
+      if (cleanName === 'project.json') {
         try {
-          const meta = JSON.parse(await entry.async('string'));
+          const meta = JSON.parse(content);
           board = typeof meta.board === 'string' ? meta.board : '';
+
           if (Array.isArray(meta.libs)) restoreImportedLibs(meta.libs);
-          if (meta.smartWifi && typeof meta.smartWifi === 'object') applySmartWifiConfig(meta.smartWifi);
+          if (meta.smartWifi && typeof meta.smartWifi === 'object') {
+            applySmartWifiConfig(meta.smartWifi);
+          }
         } catch(_){}
         continue;
       }
+
       if (!/\.(ino|cpp|c|h|hpp|hh|cc|txt|json|csv)$/i.test(cleanName)) continue;
-      loaded.push({ name:cleanName, content:await entry.async('string') });
+
+      loaded.push({ name: cleanName, content });
     }
-    if (!loaded.length) throw new Error('ZIP has no Arduino project files');
-    if (board && Array.from(document.getElementById('board-sel').options).some(option=>option.value === board)){
+
+    if (!loaded.length)
+      throw new Error('ZIP has no Arduino project files');
+
+    if (
+      board &&
+      Array.from(document.getElementById('board-sel').options)
+        .some(option => option.value === board)
+    ){
       document.getElementById('board-sel').value = board;
       onBoardChange();
     }
-    const ok = !projectFiles.some(f=>f.content.trim()) || confirm(`Replace current project with ${loaded.length} file(s) from ZIP?`);
+
+    const ok =
+      !projectFiles.some(f => f.content.trim()) ||
+      confirm(`Replace current project with ${loaded.length} file(s) from ZIP?`);
+
     if (!ok) return;
+
     applyProject(loaded);
     setStatus('✓ ZIP imported', 'ok');
     serialLog(`Project ZIP imported: ${loaded.length} file(s)`, 'sys');
+
   } catch(e){
     setStatus('✗ ZIP import failed', 'err');
     serialLog('ZIP import error: ' + e.message, 'sys');
