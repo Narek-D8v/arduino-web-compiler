@@ -1637,9 +1637,7 @@ async function exportWokwiZip(){
 
     // firmware
     const firmware = await addWokwiFirmware();
-
     let firmwarePath = '';
-
     if (firmware) {
       data[firmware.path] = firmware.data;
       firmwarePath = firmware.path;
@@ -1652,11 +1650,7 @@ async function exportWokwiZip(){
 
     // ZIP
     const zipped = zipSync(data);
-
-    const blob = new Blob(
-      [zipped],
-      { type: 'application/zip' }
-    );
+    const blob = new Blob([zipped], { type: 'application/zip' });
 
     downloadBlob(blob, 'wokwi-project.zip');
 
@@ -1668,8 +1662,8 @@ async function exportWokwiZip(){
     serialLog('Wokwi export error: ' + e.message, 'sys');
   }
 }
-  
-}function openWokwi(){
+
+function openWokwi(){
   window.open(wokwiBoardInfo().newUrl, '_blank', 'noopener');
 }
 
@@ -1683,7 +1677,6 @@ function downloadBlob(blob, filename){
   a.remove();
   URL.revokeObjectURL(objectUrl);
 }
-
 
 function setupProjectDropZone(){
   const wrap = document.getElementById('editor-wrap');
@@ -1702,7 +1695,7 @@ function setupProjectDropZone(){
     if (/\.zip$/i.test(file.name)) importProjectZip(file);
   });
 }
-
+  
 let esptoolModulePromise = null;
 let fsFiles = [];
 let fsImageFile = null;
