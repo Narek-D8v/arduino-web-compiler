@@ -10,62 +10,57 @@
 // Метод: GET
 // Ответ: application/gzip  (~4 MB, кэшируется браузером/CDN на 24 часа)
 
-const UPSTREAM_URL = 'https://downloads.arduino.cc/libraries/library_index.json.gz';
+const UPSTREAM_URL =
+  'https://downloads.arduino.cc/libraries/library_index.json.gz';
 
-// Сколько секунд Vercel Edge Cache и браузер могут кэшировать ответ.
-// 86400 = 24 часа. Индекс обновляется редко, поэтому это безопасно.
 const CACHE_TTL = 86400;
 
 function setCors(res) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }
 
 module.exports = async (req, res) => {
-    setCors(res);
+  setCors(res);
 
-    // Preflight-запрос браузера — отвечаем сразу
-    if (req.method === 'OPTIONS') {
-        res.status(200).end();
-        return;
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Use GET' });
+  }
+
+  try {
+    const upstream = await fetch(UPSTREAM_URL);
+
+    if (!upstream.ok) {
+      throw new Error(`Upstream error ${upstream.status}`);
     }
 
-    if (req.method !== 'GET') {
-        return res.status(405).json({ error: 'Method not allowed. Use GET.' });
-    }
+    const buffer = Buffer.from(await upstream.arrayBuffer());
 
-    try {
-        // Запрашиваем индекс у Arduino — с нашего сервера это работает без ограничений
-        const upstream = await fetch(UPSTREAM_URL, {
-            headers: {
-                // Представляемся как обычный браузер, чтобы не попасть под bot-фильтры
-                'User-Agent': 'Mozilla/5.0 (compatible; ArduinoWebIDE/1.0)',
-                'Accept-Encoding': 'gzip, deflate',
-            }
-        });
+    res.setHeader(
+      'Content-Type',
+      'application/gzip'
+    );
 
-        if (!upstream.ok) {
-            return res.status(502).json({
-                error: `Upstream error: ${upstream.status} ${upstream.statusText}`
-            });
-        }
+    res.setHeader(
+      'Cache-Control',
+      `public, max-age=${CACHE_TTL}, s-maxage=${CACHE_TTL}`
+    );
 
-        const buffer = await upstream.arrayBuffer();
+    res.setHeader('Content-Length', buffer.length);
 
-        // Говорим браузеру и Vercel CDN кэшировать ответ на 24 часа.
-        // s-maxage — для CDN (Vercel Edge Cache), max-age — для браузера.
-        res.setHeader('Content-Type', 'application/gzip');
-        res.setHeader('Cache-Control', `public, max-age=${CACHE_TTL}, s-maxage=${CACHE_TTL}`);
-        res.setHeader('Content-Length', buffer.byteLength);
+    res.status(200).send(buffer);
 
-        res.status(200).send(Buffer.from(buffer));
+  } catch (err) {
+    console.error(err);
 
-    } catch (err) {
-        console.error('lib-index proxy error:', err);
-        res.status(500).json({
-            error: 'Failed to fetch library index',
-            message: err.message
-        });
-    }
+    res.status(500).json({
+      error: 'Failed to fetch library index',
+      message: err.message
+    });
+  }
 };
