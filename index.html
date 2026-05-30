@@ -1587,18 +1587,17 @@ async function exportWokwiZip(){
       data['libraries.txt'] = strToU8(libs.join('\n') + '\n');
     }
 
-    // 4. firmware (ВАЖНО: async функция)
-    const firmwarePath = await addWokwiFirmwareToObject(data);
+    // 4. firmware (используем оригинальную функцию)
+    const firmwareData = await addWokwiFirmware(); // возвращает Uint8Array или Blob
+    data['firmware.bin'] = firmwareData;
 
     // 5. wokwi.toml
-    data['wokwi.toml'] = strToU8(wokwiToml(firmwarePath));
+    data['wokwi.toml'] = strToU8(wokwiToml(firmwareData));
 
     // 6. ZIP
     const zipped = zipSync(data);
 
-    const blob = new Blob([zipped], {
-      type: 'application/zip'
-    });
+    const blob = new Blob([zipped], { type: 'application/zip' });
 
     downloadBlob(blob, 'wokwi-project.zip');
 
@@ -1610,7 +1609,7 @@ async function exportWokwiZip(){
     serialLog('Wokwi export error: ' + e.message, 'sys');
   }
 }
-
+  
 function openWokwi(){
   window.open(wokwiBoardInfo().newUrl, '_blank', 'noopener');
 }
@@ -1626,28 +1625,6 @@ function downloadBlob(blob, filename){
   URL.revokeObjectURL(objectUrl);
 }
 
-let jsZipLoadPromise = null;
-
-function ensureJSZip(){
-  if (window.JSZip) return Promise.resolve(window.JSZip);
-  if (jsZipLoadPromise) return jsZipLoadPromise;
-  jsZipLoadPromise = new Promise((resolve, reject)=>{
-    const existing = [...document.scripts].find(script=>script.src.includes('jszip'));
-    const script = existing || document.createElement('script');
-    const done = ()=> window.JSZip ? resolve(window.JSZip) : reject(new Error('JSZip failed to load'));
-    script.addEventListener('load', done, { once:true });
-    script.addEventListener('error', ()=> reject(new Error('JSZip CDN is unavailable')), { once:true });
-    if (!existing){
-      script.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
-      document.head.appendChild(script);
-    }
-    setTimeout(done, 1500);
-  }).catch(error=>{
-    jsZipLoadPromise = null;
-    throw error;
-  });
-  return jsZipLoadPromise;
-}
 
 function setupProjectDropZone(){
   const wrap = document.getElementById('editor-wrap');
@@ -1783,14 +1760,29 @@ function renderFsFiles(){
 
 async function exportFsZip(){
   try {
-    const JSZipCtor = await ensureJSZip();
-    if (!fsFiles.length) throw new Error('Add FS files first');
-    const zip = new JSZipCtor();
+    const { zipSync } = window.fflate;
+
+    if (!fsFiles.length)
+      throw new Error('Add FS files first');
+
+    const data = {};
+
     for (const item of fsFiles){
-      zip.file(item.name.replace(/^\/+/, ''), await item.file.arrayBuffer());
+      data[item.name.replace(/^\/+/, '')] =
+        new Uint8Array(await item.file.arrayBuffer());
     }
-    downloadBlob(await zip.generateAsync({ type:'blob' }), 'esp32-fs-files.zip');
+
+    const zipped = zipSync(data);
+
+    const blob = new Blob(
+      [zipped],
+      { type: 'application/zip' }
+    );
+
+    downloadBlob(blob, 'esp32-fs-files.zip');
+
     setStatus('✓ FS ZIP exported', 'ok');
+
   } catch(e){
     setStatus('✗ FS ZIP failed', 'err');
     serialLog('FS ZIP error: ' + e.message, 'sys');
@@ -2729,14 +2721,19 @@ function searchLibs(q){
 
 async function firstHeaderInLibraryZip(file){
   try {
-    const JSZipCtor = await ensureJSZip();
-    const zip = await JSZipCtor.loadAsync(file);
-    const headers = Object.values(zip.files)
-      .filter(entry=>!entry.dir && /\.h$/i.test(entry.name))
-      .map(entry=>sanitizeFileName(entry.name))
+    const { unzipSync, strFromU8 } = window.fflate;
+
+    const buf = await file.arrayBuffer();
+    const unzipped = unzipSync(new Uint8Array(buf));
+
+    const headers = Object.keys(unzipped)
+      .filter(name => /\.h$/i.test(name))
+      .map(name => sanitizeFileName(name))
       .filter(Boolean);
+
     return headers.sort((a,b)=>a.length - b.length)[0] || '';
-  } catch(_){
+
+  } catch(_) {
     return '';
   }
 }
