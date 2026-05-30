@@ -3292,19 +3292,29 @@ async function loadLibIndex(){
   const setStatus = msg => { if (statusEl) statusEl.textContent = msg; };
 
   // ── Проверяем кэш (localStorage) ──────────────────────────────────────────
-  try {
-    const cached = localStorage.getItem('_libIndexCache');
-    if (cached) {
-      const { ts, data } = JSON.parse(cached);
-      // Кэш живёт 24 часа
-      if (Date.now() - ts < 86400000 && Array.isArray(data) && data.length > 100) {
-        _libIndex = data;
-        _libIndexLoading = false;
-        setStatus(`✓ ${data.length.toLocaleString()} libraries loaded (cached)`);
-        return _libIndex;
-      }
+  
+try {
+  const cached = localStorage.getItem('_libIndexCache');
+  if (cached) {
+    const { ts, data } = JSON.parse(cached);
+    // Кэш живёт 24 часа
+    if (Date.now() - ts < 86400000 && Array.isArray(data) && data.length > 100) {
+      _libIndex = data;
+      _libFuse = new Fuse(_libIndex, {
+        includeScore: true,
+        threshold: 0.35,
+        keys: [
+          { name: 'name', weight: 0.6 },
+          { name: 'header', weight: 0.3 },
+          { name: 'sentence', weight: 0.1 }
+        ]
+      });
+      _libIndexLoading = false;
+      setStatus(`✓ ${data.length.toLocaleString()} libraries loaded (cached)`);
+      return _libIndex;
     }
-  } catch(_){}
+  }
+} catch(_){}
 
   // ── Скачиваем свежий индекс ───────────────────────────────────────────────
   setStatus('⏳ Loading library index…');
@@ -3370,11 +3380,20 @@ async function loadLibIndex(){
     return _libIndex;
 
   } catch(err) {
-    _libIndexLoading = false;
-    setStatus(`⚠ Could not load registry: ${err.message} — searching built-in list`);
-    _libIndex = LIBS;   // fallback на встроенный список
-    return _libIndex;
-  }
+      _libIndexLoading = false;
+      setStatus(`⚠ Could not load registry: ${err.message} — searching built-in list`);
+      _libIndex = LIBS;
+      _libFuse = new Fuse(_libIndex, {
+        includeScore: true,
+        threshold: 0.35,
+        keys: [
+          { name: 'name', weight: 0.6 },
+          { name: 'header', weight: 0.3 },
+          { name: 'sentence', weight: 0.1 }
+        ]
+      });
+      return _libIndex;
+   }
 }
 
 // Вызывается при переключении на вкладку Search
