@@ -267,7 +267,7 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
   <button class="tb-btn ghost" onclick="exportProjectZip()">Export ZIP</button>
   <button class="tb-btn ghost" onclick="document.getElementById('project-zip-input').click()">Import ZIP</button>
   <input type="file" id="project-zip-input" accept=".zip" style="display:none" onchange="importProjectZip(this.files[0]); this.value=''">
-  <button class="tb-btn ghost" onclick="exportWokwiZip()">Wokwi ZIP</button>
+  <button class="tb-btn ghost" id="export-wokwi-btn" onclick="exportWokwiZip()" disabled>Wokwi ZIP</button>
   <button class="tb-btn ghost" onclick="openWokwi()">Open Wokwi</button>
   <button class="tb-btn ghost" id="pwa-install-btn" onclick="installPwa()" hidden>Install</button>
   <select class="tb-sel" id="theme-sel" onchange="setEditorTheme(this.value)">
@@ -510,11 +510,21 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
 
 <!-- Scripts -->
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
-<script type="module">
-import { zipSync, unzipSync, strToU8, strFromU8 } 
-from "https://cdn.jsdelivr.net/npm/fflate/esm/browser.js";
+<script>
+async function getFflate(){
+  if (window.fflate) return window.fflate;
+  const mod = await import(
+    'https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js'
+  );
+  window.fflate = mod;
+  return mod;
+}
 
-window.fflate = { zipSync, unzipSync, strToU8, strFromU8 };
+// Preload fflate and enable Wokwi ZIP button when ready
+getFflate().then(() => {
+  const btn = document.getElementById('export-wokwi-btn');
+  if (btn) btn.disabled = false;
+});
 </script>
 <script src="https://github.com/dbuezas/arduino-web-uploader/releases/download/v1.1.2/main.js"></script>
 
@@ -1609,25 +1619,25 @@ function wokwiToml(firmwarePath){
 
 async function exportWokwiZip(){
   try {
-    const { zipSync, strToU8 } = window.fflate;
+    const { zipSync, strToU8 } = await getFflate();
 
     syncActiveFile();
 
     const data = {};
 
-    // файлы проекта
+    // 1. project files
     projectFiles.forEach(file => {
       data[file.name] = strToU8(file.content);
     });
 
-    // diagram.json
+    // 2. diagram.json
     if (!projectFiles.some(file => file.name === 'diagram.json')) {
       data['diagram.json'] = strToU8(
         JSON.stringify(wokwiDiagram(), null, 2)
       );
     }
 
-    // libraries.txt
+    // 3. libraries.txt
     const libs = wokwiLibraryNames();
     if (libs.length) {
       data['libraries.txt'] = strToU8(
@@ -1635,7 +1645,7 @@ async function exportWokwiZip(){
       );
     }
 
-    // firmware
+    // 4. firmware
     const firmware = await addWokwiFirmware();
     let firmwarePath = '';
     if (firmware) {
@@ -1643,12 +1653,12 @@ async function exportWokwiZip(){
       firmwarePath = firmware.path;
     }
 
-    // wokwi.toml
+    // 5. wokwi.toml
     data['wokwi.toml'] = strToU8(
       wokwiToml(firmwarePath)
     );
 
-    // ZIP
+    // 6. zip build
     const zipped = zipSync(data);
     const blob = new Blob([zipped], { type: 'application/zip' });
 
@@ -1658,6 +1668,7 @@ async function exportWokwiZip(){
     serialLog('Wokwi project ZIP exported', 'sys');
 
   } catch(e){
+    console.error(e);
     setStatus('✗ Wokwi export failed', 'err');
     serialLog('Wokwi export error: ' + e.message, 'sys');
   }
@@ -2864,4 +2875,3 @@ window.addEventListener('load',()=>{
 </script>
 </body>
 </html>
-
