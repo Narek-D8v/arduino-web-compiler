@@ -1511,42 +1511,88 @@ async function fetchArtifactBlob(url){
   }
 }
 
-async function addWokwiFirmware(zip){
+async function addWokwiFirmware(){
   const { board } = boardInfo();
+
   if (isESP(board)){
-    const manifestBlob = await fetchArtifactBlob(latestManifestUrl || `${BUILDS}/manifest.json?t=${Date.now()}`);
+    const manifestBlob =
+      await fetchArtifactBlob(
+        latestManifestUrl ||
+        `${BUILDS}/manifest.json?t=${Date.now()}`
+      );
+
     if (manifestBlob){
       try {
         const manifest = JSON.parse(await manifestBlob.text());
-        const parts = manifest.builds?.[0]?.parts || [];
-        const merged = parts.find(part=>/merged/i.test(part.path));
-        const app = merged || parts.find(part=>/firmware|app/i.test(part.path));
+
+        const parts =
+          manifest.builds?.[0]?.parts || [];
+
+        const merged =
+          parts.find(part => /merged/i.test(part.path));
+
+        const app =
+          merged ||
+          parts.find(part => /firmware|app/i.test(part.path));
+
         if (app){
-          const blob = await fetchArtifactBlob(artifactUrl(app.path));
+          const blob =
+            await fetchArtifactBlob(
+              artifactUrl(app.path)
+            );
+
           if (blob){
-            zip.file('firmware.bin', await blob.arrayBuffer());
-            return 'firmware.bin';
+            return {
+              path: 'firmware.bin',
+              data: new Uint8Array(
+                await blob.arrayBuffer()
+              )
+            };
           }
         }
       } catch(_){}
     }
-    const fallback = await fetchArtifactBlob(`${BUILDS}/merged-firmware.bin?t=${Date.now()}`) ||
-      await fetchArtifactBlob(`${BUILDS}/firmware.bin?t=${Date.now()}`);
+
+    const fallback =
+      await fetchArtifactBlob(
+        `${BUILDS}/merged-firmware.bin?t=${Date.now()}`
+      ) ||
+      await fetchArtifactBlob(
+        `${BUILDS}/firmware.bin?t=${Date.now()}`
+      );
+
     if (fallback){
-      zip.file('firmware.bin', await fallback.arrayBuffer());
-      return 'firmware.bin';
+      return {
+        path: 'firmware.bin',
+        data: new Uint8Array(
+          await fallback.arrayBuffer()
+        )
+      };
     }
-    return '';
+
+    return null;
   }
 
-  const hex = await fetchArtifactBlob(latestHexUrl || `${BUILDS}/firmware.hex?t=${Date.now()}`);
+  // Arduino / AVR / другие платы
+
+  const hex =
+    await fetchArtifactBlob(
+      latestHexUrl ||
+      `${BUILDS}/firmware.hex?t=${Date.now()}`
+    );
+
   if (hex){
-    zip.file('firmware.hex', await hex.arrayBuffer());
-    return 'firmware.hex';
+    return {
+      path: 'firmware.hex',
+      data: new Uint8Array(
+        await hex.arrayBuffer()
+      )
+    };
   }
-  return '';
-}
 
+  return null;
+}
+  
 function tomlString(value){
   return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
@@ -1569,35 +1615,48 @@ async function exportWokwiZip(){
 
     const data = {};
 
-    // 1. project files
+    // файлы проекта
     projectFiles.forEach(file => {
       data[file.name] = strToU8(file.content);
     });
 
-    // 2. diagram.json
+    // diagram.json
     if (!projectFiles.some(file => file.name === 'diagram.json')) {
       data['diagram.json'] = strToU8(
         JSON.stringify(wokwiDiagram(), null, 2)
       );
     }
 
-    // 3. libraries.txt
+    // libraries.txt
     const libs = wokwiLibraryNames();
     if (libs.length) {
-      data['libraries.txt'] = strToU8(libs.join('\n') + '\n');
+      data['libraries.txt'] = strToU8(
+        libs.join('\n') + '\n'
+      );
     }
 
-    // 4. firmware (используем оригинальную функцию)
-    const firmwareData = await addWokwiFirmware(); // возвращает Uint8Array или Blob
-    data['firmware.bin'] = firmwareData;
+    // firmware
+    const firmware = await addWokwiFirmware();
 
-    // 5. wokwi.toml
-    data['wokwi.toml'] = strToU8(wokwiToml(firmwareData));
+    let firmwarePath = '';
 
-    // 6. ZIP
+    if (firmware) {
+      data[firmware.path] = firmware.data;
+      firmwarePath = firmware.path;
+    }
+
+    // wokwi.toml
+    data['wokwi.toml'] = strToU8(
+      wokwiToml(firmwarePath)
+    );
+
+    // ZIP
     const zipped = zipSync(data);
 
-    const blob = new Blob([zipped], { type: 'application/zip' });
+    const blob = new Blob(
+      [zipped],
+      { type: 'application/zip' }
+    );
 
     downloadBlob(blob, 'wokwi-project.zip');
 
@@ -1610,7 +1669,7 @@ async function exportWokwiZip(){
   }
 }
   
-function openWokwi(){
+}function openWokwi(){
   window.open(wokwiBoardInfo().newUrl, '_blank', 'noopener');
 }
 
