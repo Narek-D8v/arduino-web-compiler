@@ -1,0 +1,1 @@
+{"code":"#include <TFT_eSPI.h>\n\nTFT_eSPI tft = TFT_eSPI();\n\nvoid setup() {\n  tft.init();\n  tft.setRotation(1);\n  tft.fillScreen(TFT_BLACK);\n\n  tft.setTextColor(TFT_WHITE);\n  tft.setTextSize(2);\n  tft.setCursor(20, 20);\n  tft.println(\"Hallo Tim\");\n}\n\nvoid loop() {\n  // leer lassen\n}","files":[],"features":{"smartWifi":false}}
