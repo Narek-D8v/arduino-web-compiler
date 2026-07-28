@@ -988,9 +988,7 @@ function runLightDiagnostics(){
   let blockComment = false;
   let braceDepth = 0;
 
-  // Collect declared functions and variables from the file
-  const declaredFuncs = new Set();
-  const declaredVars = new Set();
+  // Collect includes for duplicate detection
   const includes = new Set();
   lines.forEach((raw) => {
     const s = raw.trim();
@@ -1000,45 +998,7 @@ function runLightDiagnostics(){
     // #include <Header.h>
     const incMatch = s.match(/^#\s*include\s*[<"]([^>"]+)\.h[>"]/i);
     if (incMatch) includes.add(incMatch[1].toLowerCase());
-    // variable declarations: type name; or type name =
-    const varMatch = s.match(/^(?:int|float|double|char|byte|long|short|unsigned|String|bool|uint8_t|uint16_t|uint32_t|int8_t|int16_t|int32_t)\s+\*?\s*(\w+)\s*(?:=|;|$)/);
-    if (varMatch) declaredVars.add(varMatch[1]);
   });
-
-  // Known Arduino function names for undefined-call detection
-  const KNOWN_FUNCS = new Set([
-    'pinMode','digitalWrite','digitalRead','analogWrite','analogRead',
-    'delay','delayMicroseconds','millis','micros',
-    'map','constrain','random','randomSeed',
-    'tone','noTone',
-    'pulseIn','pulseInLong',
-    'shiftOut','shiftIn',
-    'attachInterrupt','detachInterrupt','interrupts','noInterrupts',
-    'abs','min','max','pow','sqrt','sin','cos','tan','degrees','radians',
-    'lowByte','highByte','bitRead','bitSet','bitClear','bitWrite','bit',
-    'Serial.begin','Serial.end','Serial.print','Serial.println','Serial.write',
-    'Serial.read','Serial.available','Serial.readBytes','Serial.readString',
-    'Serial.parseInt','Serial.parseFloat','Serial.peek','Serial.flush','Serial.setTimeout',
-    'Serial.readStringUntil',
-    'Wire.begin','Wire.requestFrom','Wire.beginTransmission','Wire.endTransmission',
-    'Wire.write','Wire.read','Wire.available','Wire.setClock','Wire.onReceive','Wire.onRequest',
-    'SPI.begin','SPI.end','SPI.beginTransaction','SPI.endTransaction',
-    'SPI.transfer','SPI.transfer16',
-    'WiFi.begin','WiFi.scanNetworks','WiFi.disconnect','WiFi.mode','WiFi.softAP',
-    'WiFi.localIP','WiFi.status','WiFi.RSSI','WiFi.SSID','WiFi.setHostname',
-    'Servo.attach','Servo.write','Servo.writeMicroseconds','Servo.read','Servo.detach','Servo.attached',
-    'EEPROM.read','EEPROM.write','EEPROM.update','EEPROM.put','EEPROM.get','EEPROM.length',
-    'SmartWiFi.begin','SmartWiFi.handle',
-    'setup','loop',
-  ]);
-
-  // Known Arduino classes/objects (used with dot notation)
-  const KNOWN_OBJECTS = new Set([
-    'Serial','Wire','SPI','WiFi','Server','client','Server','EEPROM','Servo',
-    'SmartWiFi','Preferences','DNSServer','WebServer','HTTPClient','WiFiClient','WiFiServer',
-    'BLEAdvertising','BLEScan','BLEBeacon','BLEDevice','BLEUtils','BLEAdvertising',
-    'BLEServer','BLECharacteristic','BLEDescriptor','BLEService',
-  ]);
 
   lines.forEach((raw, idx)=>{
     const lineNo = idx + 1;
@@ -1091,32 +1051,6 @@ function runLightDiagnostics(){
 
     const trimmed = stripLineComment(raw).trim();
     const codeTrimmed = code.trim();
-    if (/^[A-Za-z_]\w*;?$/.test(codeTrimmed)){
-      const ident = codeTrimmed.replace(/;$/,'');
-      let message;
-      if (depthBeforeLine === 0){
-        if (/^[A-Z]/.test(ident)){
-          message = `Unknown type or identifier '${ident}' at global scope. Did you mean a different type name, or forget to declare a variable? (e.g. 'int ${ident} = 0;')`;
-        } else if (declaredVars.has(ident)){
-          message = `Unexpected use of '${ident}' — variable name cannot appear alone. Did you mean ${ident} = ...; or ${ident}; (if it had a value)?`;
-        } else if (declaredFuncs.has(ident)){
-          message = `Unexpected function name '${ident}' alone. Did you forget to call it? (e.g. '${ident}();')`;
-        } else {
-          message = `Unknown identifier '${ident}' at global scope. Did you forget a type (e.g. 'int ${ident};') or include a header?`;
-        }
-      } else {
-        if (KNOWN_OBJECTS.has(ident)){
-          message = `'${ident}' needs a method call: e.g. '${ident}.begin();' or '${ident}.print(...)'`;
-        } else if (declaredFuncs.has(ident)){
-          message = `'${ident}' is a function — did you mean '${ident}();'?`;
-        } else if (declaredVars.has(ident)){
-          message = `'${ident}' is a variable — did you mean '${ident} = value;'?`;
-        } else {
-          message = `Unexpected identifier '${ident}'. Did you forget a semicolon, assignment, or do you have a typo?`;
-        }
-      }
-      markers.push(marker(lineNo, raw.indexOf(ident) + 1, message, Severity.Error));
-    }
     if (/^#\s*include\b/.test(trimmed) && !/^#\s*include\s*(<[^>]+>|"[^"]+")/.test(trimmed)){
       markers.push(marker(lineNo, raw.indexOf('include') + 1, 'Expected #include <Header.h> or #include "Header.h"', Severity.Warning));
     }
@@ -1156,24 +1090,6 @@ function runLightDiagnostics(){
       const match = raw.match(check.re);
       if (match) markers.push(marker(lineNo, match.index + 1, check.msg, Severity.Warning));
     });
-
-    // ── Call to undefined function ──────────────────────────────
-    const callRe = /\b([A-Za-z_]\w*)\s*\(/g;
-    let callMatch;
-    while ((callMatch = callRe.exec(code)) !== null){
-      const fname = callMatch[1];
-      // Skip control flow, types, and known/declared functions
-      if (/^(if|for|while|switch|catch|return|sizeof|int|float|double|char|byte|long|short|void|bool|String)$/.test(fname)) continue;
-      if (KNOWN_FUNCS.has(fname)) continue;
-      if (declaredFuncs.has(fname)) continue;
-      // obj.method() — skip if KNOWN_OBJECTS
-      if (callMatch.index > 0 && code[callMatch.index - 1] === '.') continue;
-      // Suggest likely function name if similar exists
-      let suggestion = '';
-      const similar = [...KNOWN_FUNCS].filter(f => f.length > 3 && (f.startsWith(fname) || fname.startsWith(f) || f.includes(fname) || fname.includes(f)));
-      if (similar.length) suggestion = ` Did you mean '${similar.slice(0, 3).join("' or '")}'?`;
-      markers.push(marker(lineNo, code.indexOf(fname) + 1, `Call to unknown function '${fname}()'. Function is not defined.${suggestion}`, Severity.Warning));
-    }
 
     // ── if (x = 5) — assignment in condition ────────────────────
     const ifAssignRe = /\bif\s*\([^)]*\b(\w+)\s*=\s*[^)=]/;
