@@ -10,6 +10,7 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.1.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -23,7 +24,7 @@ html,body{height:100%;overflow:hidden}
 body{display:grid;grid-template-rows:48px 1fr;background:var(--bg0);color:var(--text);font-family:'Inter',sans-serif;font-size:14px}
 
 /* ── Toolbar ── */
-#toolbar{display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--bg1);border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;overflow-y:hidden;min-width:0}
+#toolbar{display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--bg1);border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;overflow-y:hidden;min-width:0;position:relative}
 #toolbar>*{flex:none}
 #toolbar h1{font-size:15px;font-weight:700;letter-spacing:.5px;color:var(--green);margin-right:8px;white-space:nowrap}
 .tb-sep{width:1px;height:24px;background:var(--border);margin:0 4px}
@@ -44,6 +45,10 @@ select.tb-sel:focus{outline:none;border-color:var(--blue)}
 #tb-status.err{background:rgba(244,67,54,.12);color:var(--red);border:1px solid rgba(244,67,54,.2)}
 #tb-status.run{background:rgba(33,150,243,.12);color:var(--blue);border:1px solid rgba(33,150,243,.2)}
 #tb-status.hidden{display:none}
+#diag-badge.err{background:rgba(244,67,54,.14);color:var(--red);border:1px solid rgba(244,67,54,.2);display:flex!important}
+#diag-badge.warn{background:rgba(255,152,0,.14);color:var(--amber);border:1px solid rgba(255,152,0,.2);display:flex!important}
+#diag-badge.ok{background:rgba(0,230,118,.1);color:var(--green);border:1px solid rgba(0,230,118,.15);display:flex!important}
+#diag-badge:hover{filter:brightness(1.15)}
 
 /* ── Main Layout ── */
 #main{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,var(--panel-width));height:100%;min-height:0;overflow:hidden}
@@ -57,7 +62,19 @@ select.tb-sel:focus{outline:none;border-color:var(--blue)}
 .file-tab button:hover{color:var(--red)}
 .file-action{height:24px;padding:0 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg3);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
 .file-action:hover{border-color:var(--blue)}
-#editor{flex:1;min-height:0}
+#editor{flex:1;min-height:0;position:relative}
+#editor-skeleton{position:absolute;inset:0;padding:16px;pointer-events:none;display:flex;flex-direction:column;gap:10px}
+#editor-skeleton .sk-line{height:14px;border-radius:4px;background:linear-gradient(90deg,var(--bg3) 25%,var(--bg2) 50%,var(--bg3) 75%);background-size:200% 100%;animation:sk-shimmer 1.8s ease-in-out infinite}
+#editor-skeleton .sk-line:nth-child(2){width:85%}
+#editor-skeleton .sk-line:nth-child(3){width:70%}
+#editor-skeleton .sk-line:nth-child(4){width:92%}
+#editor-skeleton .sk-line:nth-child(5){width:60%}
+#editor-skeleton .sk-line:nth-child(6){width:78%}
+#editor-skeleton .sk-line:nth-child(7){width:45%}
+#editor-skeleton .sk-line:nth-child(8){width:88%}
+#editor-skeleton .sk-line:nth-child(9){width:55%}
+#editor-skeleton .sk-line:nth-child(10){width:72%}
+@keyframes sk-shimmer{0%{background-position:200% 0}to{background-position:-200% 0}}
 #editor-wrap.drag-over{outline:2px dashed var(--blue);outline-offset:-8px;background:rgba(33,150,243,.06)}
 
 /* ── Right Panel ── */
@@ -206,6 +223,12 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
 .lib-card .lib-name{font-size:13px;font-weight:600;margin-bottom:2px}
 .lib-card .lib-sub{font-size:11px;color:var(--muted)}
 .lib-card .lib-toggle{float:right;font-size:16px}
+.search-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;transition:.15s;user-select:none}
+.search-card:hover{border-color:var(--blue);background:rgba(33,150,243,.05)}
+.search-card .search-card-title{font-size:13px;font-weight:600;margin-bottom:2px}
+.search-card .search-card-sub{font-size:11px;color:var(--muted)}
+.search-card .search-card-desc{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.3}
+.search-empty{color:var(--muted);font-size:13px;padding:16px;text-align:center}
 .installed-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
 .installed-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.25);border-radius:20px;font-size:12px;font-weight:600;color:var(--green)}
 .installed-badge button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:0}
@@ -217,6 +240,77 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
 .custom-include-row input{flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-family:var(--mono);font-size:13px}
 .custom-include-row input:focus{outline:none;border-color:var(--blue)}
 .custom-include-row button{padding:8px 16px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer}
+
+/* Problems panel */
+#problems-list{font-family:var(--mono);font-size:11px;line-height:1.4}
+.prob-item{display:flex;align-items:baseline;gap:6px;padding:5px 8px;border-radius:4px;cursor:pointer;transition:background .1s}
+.prob-item:hover{background:rgba(33,150,243,.08)}
+.prob-item.err{color:var(--red);border-left:2px solid var(--red)}
+.prob-item.warn{color:var(--amber);border-left:2px solid var(--amber)}
+.prob-line{color:var(--muted);flex:none;min-width:32px}
+.prob-msg{flex:1;word-break:break-word}
+.prob-empty{color:var(--muted);font-size:11px;padding:8px;text-align:center;font-style:italic}
+
+/* Toast notifications */
+#toast-container{position:fixed;bottom:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none;max-width:420px}
+.toast{pointer-events:auto;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:500;line-height:1.4;box-shadow:0 8px 30px rgba(0,0,0,.5);transform:translateX(120%);opacity:0;transition:transform .35s cubic-bezier(.16,1,.3,1),opacity .35s;backdrop-filter:blur(12px);word-break:break-word}
+.toast.show{transform:translateX(0);opacity:1}
+.toast.ok{background:rgba(0,230,118,.18);color:var(--green);border:1px solid rgba(0,230,118,.25)}
+.toast.err{background:rgba(244,67,54,.18);color:var(--red);border:1px solid rgba(244,67,54,.25)}
+.toast.run{background:rgba(33,150,243,.18);color:var(--blue);border:1px solid rgba(33,150,243,.25)}
+.toast .toast-close{float:right;margin-left:10px;background:none;border:none;color:inherit;font-size:16px;cursor:pointer;opacity:.6;line-height:1}
+.toast .toast-close:hover{opacity:1}
+
+/* Build progress bar */
+#build-progress-bar{position:absolute;bottom:0;left:0;height:2px;background:var(--green);transition:width .6s cubic-bezier(.16,1,.3,1);width:0;z-index:10;border-radius:0 1px 1px 0}
+#build-progress-bar.fail{background:var(--red)}
+#build-progress-bar.done{width:100%!important}
+
+/* ── Keyboard Shortcuts overlay ── */
+.shortcuts-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:none;align-items:center;justify-content:center}
+.shortcuts-overlay.open{display:flex}
+.shortcuts-box{background:var(--bg1);border:1px solid var(--border);border-radius:14px;width:min(520px,95vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden}
+.shortcuts-header{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.shortcuts-header h2{font-size:16px;font-weight:700}
+.shortcuts-body{flex:1;overflow-y:auto;padding:12px 22px 18px}
+.shortcut-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.shortcut-row:last-child{border-bottom:none}
+.shortcut-keys{display:flex;gap:4px;flex-wrap:wrap}
+.shortcut-key{display:inline-block;padding:2px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:11px;color:var(--text)}
+
+/* ── Editor Settings overlay ── */
+.settings-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:none;align-items:center;justify-content:center}
+.settings-overlay.open{display:flex}
+.settings-box{background:var(--bg1);border:1px solid var(--border);border-radius:14px;width:min(420px,95vw);display:flex;flex-direction:column;overflow:hidden}
+.settings-header{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.settings-header h2{font-size:16px;font-weight:700}
+.settings-body{padding:18px 22px;display:grid;gap:14px}
+.settings-row{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:10px}
+.settings-row label{font-size:13px;font-weight:600;color:var(--text)}
+.settings-row select,.settings-row input{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--mono);font-size:12px}
+.settings-row select:focus,.settings-row input:focus{outline:none;border-color:var(--blue)}
+.settings-actions{display:flex;gap:8px;padding:0 22px 18px;justify-content:flex-end}
+.settings-btn{padding:7px 18px;border-radius:6px;border:none;font-size:13px;font-weight:600;cursor:pointer}
+.settings-btn.primary{background:var(--blue);color:#fff}
+.settings-btn.ghost{background:var(--bg3);color:var(--text);border:1px solid var(--border)}
+
+/* ── File context menu ── */
+#file-context-menu{position:fixed;z-index:300;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:140px;display:none;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+#file-context-menu.open{display:block}
+.ctx-item{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:4px;font-size:12px;cursor:pointer;white-space:nowrap;color:var(--text)}
+.ctx-item:hover{background:rgba(33,150,243,.12)}
+.ctx-item.danger{color:var(--red)}
+.ctx-item.danger:hover{background:rgba(244,67,54,.12)}
+.ctx-sep{height:1px;background:var(--border);margin:4px 0}
+
+/* ── Serial Plotter ── */
+#serial-plotter-wrap{display:none;flex-direction:column;gap:6px;padding:14px;border-bottom:1px solid var(--border)}
+#serial-plotter-wrap.open{display:flex}
+#serial-plotter{width:100%;height:160px;background:var(--bg0);border:1px solid var(--border);border-radius:6px;display:block}
+.plotter-controls{display:flex;gap:6px;align-items:center}
+.plotter-controls button{padding:4px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;cursor:pointer}
+.plotter-controls button:hover{border-color:var(--blue)}
+.plotter-controls button.active{background:rgba(0,230,118,.15);border-color:var(--green);color:var(--green)}
 
 /* Scrollbars */
 ::-webkit-scrollbar{width:6px;height:6px}
@@ -252,19 +346,36 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
   </select>
 
   <div class="tb-sep"></div>
-  <button class="tb-btn ghost" onclick="checkSyntax()" id="check-btn">Check</button>
-  <button class="tb-btn ghost" onclick="applyQuickFixes()">Quick Fix</button>
-  <button class="tb-btn green" onclick="compile()" id="compile-btn">▶ Compile</button>
+  <div id="diag-badge" onclick="focusFirstError()" title="Click to jump to first error" style="display:none;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;font-size:12px;font-family:var(--mono);cursor:pointer;white-space:nowrap;user-select:none"></div>
+  <button class="tb-btn green" onclick="compile()" id="compile-btn" title="Ctrl+Enter">▶ Compile</button>
   <select class="tb-sel" id="example-sel" onchange="loadExample(this.value)">
     <option value="">Examples</option>
-    <option value="blink">Blink</option>
-    <option value="wifi-scan">Wi-Fi Scanner</option>
-    <option value="web-server">ESP32 Web Server</option>
-    <option value="ble-beacon">BLE Beacon</option>
+    <optgroup label="Arduino">
+      <option value="blink">Blink</option>
+      <option value="fade">Fade</option>
+      <option value="button">Button</option>
+      <option value="analog-read">Analog Read Serial</option>
+      <option value="tone-melody">Tone Melody</option>
+      <option value="ultrasonic">Ultrasonic Distance</option>
+      <option value="dht-sensor">DHT Sensor</option>
+    </optgroup>
+    <optgroup label="ESP32">
+      <option value="wifi-scan">Wi-Fi Scanner</option>
+      <option value="web-server">Web Server</option>
+      <option value="ble-beacon">BLE Beacon</option>
+      <option value="deep-sleep">Deep Sleep</option>
+      <option value="touch-read">Touch Read</option>
+      <option value="servo-sweep">Servo Sweep</option>
+      <option value="mqtt-publish">MQTT Publish</option>
+      <option value="ntp-time">NTP Time</option>
+    </optgroup>
   </select>
   <button class="tb-btn ghost" onclick="openLibs()">📦 Libraries</button>
+  <button class="tb-btn ghost" onclick="formatCode()" title="Ctrl+Shift+F">✨ Format</button>
+  <button class="tb-btn ghost" onclick="showEditorSettings()">⚙ Settings</button>
   <button class="tb-btn ghost" onclick="shareProject()">Share</button>
   <button class="tb-btn ghost" onclick="togglePinout()">Pinout</button>
+  <button class="tb-btn ghost" onclick="exportArduinoIde()">📂 Export .INO</button>
   <button class="tb-btn ghost" onclick="exportProjectZip()">Export ZIP</button>
   <button class="tb-btn ghost" onclick="document.getElementById('project-zip-input').click()">Import ZIP</button>
   <input type="file" id="project-zip-input" accept=".zip" style="display:none" onchange="importProjectZip(this.files[0]); this.value=''">
@@ -278,9 +389,11 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
   </select>
   <label class="tb-toggle"><input type="checkbox" id="minimap-toggle" onchange="setMinimap(this.checked)"> Minimap</label>
   <div id="tb-status" class="hidden"></div>
+  <div id="build-progress-bar"></div>
 </div>
 
 <!-- Main -->
+<div id="toast-container"></div>
 <div id="main">
   <div id="editor-wrap">
     <div id="filebar">
@@ -289,7 +402,7 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
       <button class="file-action" onclick="document.getElementById('project-file-input').click()">Attach</button>
       <input type="file" id="project-file-input" multiple style="display:none" onchange="attachProjectFiles(this)">
     </div>
-    <div id="editor"></div>
+    <div id="editor"><div id="editor-skeleton"><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div></div></div>
   </div>
 
   <!-- Right Panel -->
@@ -421,6 +534,7 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
     <!-- Pinout -->
     <div class="pane" id="pinout-pane" style="display:none">
       <div class="pane-title">Pinout</div>
+      <div style="margin-bottom:10px"><input id="pinout-search" class="secret-input" placeholder="Filter pins…" oninput="renderPinout(this.value)" style="font-size:12px"></div>
       <div class="pinout-grid" id="pinout-grid"></div>
     </div>
 
@@ -432,15 +546,42 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
       </div>
       <div id="build-state">Idle</div>
       <div id="build-steps" style="margin-top:10px"></div>
+      <button class="mini-btn danger" id="cancel-build-btn" onclick="cancelBuild()" style="display:none;margin-top:8px">Cancel Build</button>
+    </div>
+
+    <!-- Problems -->
+    <div class="pane" id="problems-pane" style="display:flex;flex-direction:column;gap:4px">
+      <div class="pane-title" id="problems-title">Problems</div>
+      <div id="problems-list" style="display:flex;flex-direction:column;gap:2px;max-height:240px;overflow-y:auto"></div>
+    </div>
+
+    <!-- Serial Plotter -->
+    <div id="serial-plotter-wrap">
+      <div class="pane-title" style="display:flex;align-items:center;gap:8px;margin-bottom:0">
+        <span>Serial Plotter</span>
+        <label class="tb-toggle" style="font-size:10px;height:auto;padding:2px 6px"><input type="checkbox" id="plotter-toggle" onchange="togglePlotter(this.checked)"> Plot</label>
+        <button class="mini-btn" onclick="clearPlotter()" style="padding:2px 8px;font-size:10px">Clear</button>
+      </div>
+      <canvas id="serial-plotter"></canvas>
+      <div class="plotter-controls">
+        <span style="font-size:10px;color:var(--muted)">Plot comma-separated numbers from Serial.println</span>
+      </div>
     </div>
 
     <!-- Serial Monitor -->
     <div id="serial-wrap">
-      <div class="pane-title">Serial Monitor</div>
-      <select id="serial-baud" class="serial-baud">
-        <option>9600</option><option>19200</option><option>38400</option>
-        <option>57600</option><option selected>115200</option>
-      </select>
+      <div class="pane-title" style="display:flex;align-items:center;gap:8px">
+        <span>Serial Monitor</span>
+        <span id="serial-status-dot" style="width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none;transition:background .3s" title="Disconnected"></span>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <select id="serial-baud" style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-size:12px">
+          <option>9600</option><option>19200</option><option>38400</option>
+          <option>57600</option><option selected>115200</option>
+        </select>
+        <label class="tb-toggle" style="font-size:11px;height:auto;padding:4px 8px"><input type="checkbox" id="serial-autoscroll" checked> ↓</label>
+        <label class="tb-toggle" style="font-size:11px;height:auto;padding:4px 8px"><input type="checkbox" id="serial-timestamps"> 🕐</label>
+      </div>
       <div id="serial-controls">
         <button class="sc-btn" id="sc-connect" onclick="serialConnect()">Connect</button>
         <button class="sc-btn" id="sc-disconnect" onclick="serialDisconnect()" disabled>Disconnect</button>
@@ -528,7 +669,7 @@ getFflate().then(() => {
   if (btn) btn.disabled = false;
 });
 </script>
-<script src="https://github.com/dbuezas/arduino-web-uploader/releases/download/v1.1.2/main.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/dbuezas/arduino-web-uploader@v1.1.2/main.js"></script>
 
 <script>
 // ────────────────────────────────────────────────────────────────────────────
@@ -631,6 +772,16 @@ function switchFile(name){
   scheduleDiagnostics();
 }
 
+function fileIcon(name){
+  const ext = name.split('.').pop().toLowerCase();
+  if (['ino'].includes(ext)) return '⚡';
+  if (['cpp','c'].includes(ext)) return '🔧';
+  if (['h','hpp','hh'].includes(ext)) return '📐';
+  if (['txt','md'].includes(ext)) return '📄';
+  if (['json','csv'].includes(ext)) return '📊';
+  return '📄';
+}
+
 function renderFileTabs(){
   const tabs = document.getElementById('file-tabs');
   if (!tabs) return;
@@ -639,12 +790,32 @@ function renderFileTabs(){
     const tab = document.createElement('button');
     tab.className = 'file-tab' + (file.name === activeFile ? ' active' : '');
     tab.type = 'button';
+    tab.title = file.name;
     tab.onclick = ()=> switchFile(file.name);
-    tab.append(document.createTextNode(file.name));
+    tab.ondblclick = (e)=>{
+      e.stopPropagation();
+      if (file.name === 'sketch.ino') return;
+      const newName = prompt('Rename file:', file.name);
+      if (newName && newName.trim() && newName !== file.name){
+        const safe = uniqueFileName(newName.trim());
+        if (safe && safe !== file.name){
+          file.name = safe;
+          if (activeFile === file.name) activeFile = safe;
+          renderFileTabs();
+          saveProjectFiles();
+        }
+      }
+    };
+    tab.oncontextmenu = (e)=> showFileContextMenu(e, file.name);
+    const icon = document.createElement('span');
+    icon.textContent = fileIcon(file.name);
+    icon.style.marginRight = '4px';
+    tab.prepend(icon);
     if (file.name !== 'sketch.ino'){
       const close = document.createElement('button');
       close.type = 'button';
-      close.textContent = 'x';
+      close.textContent = '×';
+      close.title = 'Remove file';
       close.onclick = e=>{
         e.stopPropagation();
         removeProjectFile(file.name);
@@ -653,6 +824,9 @@ function renderFileTabs(){
     }
     tabs.appendChild(tab);
   });
+  // scroll active tab into view
+  const active = tabs.querySelector('.file-tab.active');
+  if (active) active.scrollIntoView({ behavior:'smooth', inline:'center', block:'nearest' });
 }
 
 function uniqueFileName(name){
@@ -757,12 +931,49 @@ function marker(line, col, message, severity){
   };
 }
 
+function updateProblemsPanel(title, markers){
+  const list = document.getElementById('problems-list');
+  const titleEl = document.getElementById('problems-title');
+  if (!list || !titleEl) return;
+  list.innerHTML = '';
+  if (markers.length){
+    titleEl.textContent = title;
+    const Severity = monaco.MarkerSeverity;
+    markers.forEach(m => {
+      const item = document.createElement('div');
+      item.className = `prob-item ${m.severity === Severity.Error ? 'err' : 'warn'}`;
+      const lineLabel = document.createElement('span');
+      lineLabel.className = 'prob-line';
+      lineLabel.textContent = `L${m.startLineNumber}`;
+      const msg = document.createElement('span');
+      msg.className = 'prob-msg';
+      msg.textContent = m.message;
+      item.append(lineLabel, msg);
+      item.onclick = (e) => {
+        e.stopPropagation();
+        if (!editor) return;
+        editor.revealPositionInCenter({ lineNumber: m.startLineNumber, column: m.startColumn });
+        editor.setPosition({ lineNumber: m.startLineNumber, column: m.startColumn });
+        editor.focus();
+      };
+      list.appendChild(item);
+    });
+  } else {
+    titleEl.textContent = 'Problems';
+    const empty = document.createElement('div');
+    empty.className = 'prob-empty';
+    empty.textContent = 'No problems detected';
+    list.appendChild(empty);
+  }
+}
+
 function runLightDiagnostics(){
   if (!editor || !window.monaco) return [];
   const file = currentFile();
   const model = editor.getModel();
   if (!file || !model || !isCodeFile(file.name)){
     monaco.editor.setModelMarkers(model, 'arduino-lite', []);
+    updateProblemsPanel('Problems', []);
     return [];
   }
 
@@ -773,6 +984,58 @@ function runLightDiagnostics(){
   const stack = [];
   let blockComment = false;
   let braceDepth = 0;
+
+  // Collect declared functions and variables from the file
+  const declaredFuncs = new Set();
+  const declaredVars = new Set();
+  const includes = new Set();
+  lines.forEach((raw) => {
+    const s = raw.trim();
+    // function declarations: void/int/float/String/byte/uint8_t/etc funcName(...)
+    const funMatch = s.match(/^(?:void|int|float|double|char|byte|long|short|unsigned|String|bool|uint8_t|uint16_t|uint32_t|int8_t|int16_t|int32_t)\s+\*?\s*(\w+)\s*\(/);
+    if (funMatch) declaredFuncs.add(funMatch[1]);
+    // #include <Header.h>
+    const incMatch = s.match(/^#\s*include\s*[<"]([^>"]+)\.h[>"]/i);
+    if (incMatch) includes.add(incMatch[1].toLowerCase());
+    // variable declarations: type name; or type name =
+    const varMatch = s.match(/^(?:int|float|double|char|byte|long|short|unsigned|String|bool|uint8_t|uint16_t|uint32_t|int8_t|int16_t|int32_t)\s+\*?\s*(\w+)\s*(?:=|;|$)/);
+    if (varMatch) declaredVars.add(varMatch[1]);
+  });
+
+  // Known Arduino function names for undefined-call detection
+  const KNOWN_FUNCS = new Set([
+    'pinMode','digitalWrite','digitalRead','analogWrite','analogRead',
+    'delay','delayMicroseconds','millis','micros',
+    'map','constrain','random','randomSeed',
+    'tone','noTone',
+    'pulseIn','pulseInLong',
+    'shiftOut','shiftIn',
+    'attachInterrupt','detachInterrupt','interrupts','noInterrupts',
+    'abs','min','max','pow','sqrt','sin','cos','tan','degrees','radians',
+    'lowByte','highByte','bitRead','bitSet','bitClear','bitWrite','bit',
+    'Serial.begin','Serial.end','Serial.print','Serial.println','Serial.write',
+    'Serial.read','Serial.available','Serial.readBytes','Serial.readString',
+    'Serial.parseInt','Serial.parseFloat','Serial.peek','Serial.flush','Serial.setTimeout',
+    'Serial.readStringUntil',
+    'Wire.begin','Wire.requestFrom','Wire.beginTransmission','Wire.endTransmission',
+    'Wire.write','Wire.read','Wire.available','Wire.setClock','Wire.onReceive','Wire.onRequest',
+    'SPI.begin','SPI.end','SPI.beginTransaction','SPI.endTransaction',
+    'SPI.transfer','SPI.transfer16',
+    'WiFi.begin','WiFi.scanNetworks','WiFi.disconnect','WiFi.mode','WiFi.softAP',
+    'WiFi.localIP','WiFi.status','WiFi.RSSI','WiFi.SSID','WiFi.setHostname',
+    'Servo.attach','Servo.write','Servo.writeMicroseconds','Servo.read','Servo.detach','Servo.attached',
+    'EEPROM.read','EEPROM.write','EEPROM.update','EEPROM.put','EEPROM.get','EEPROM.length',
+    'SmartWiFi.begin','SmartWiFi.handle',
+    'setup','loop',
+  ]);
+
+  // Known Arduino classes/objects (used with dot notation)
+  const KNOWN_OBJECTS = new Set([
+    'Serial','Wire','SPI','WiFi','Server','client','Server','EEPROM','Servo',
+    'SmartWiFi','Preferences','DNSServer','WebServer','HTTPClient','WiFiClient','WiFiServer',
+    'BLEAdvertising','BLEScan','BLEBeacon','BLEDevice','BLEUtils','BLEAdvertising',
+    'BLEServer','BLECharacteristic','BLEDescriptor','BLEService',
+  ]);
 
   lines.forEach((raw, idx)=>{
     const lineNo = idx + 1;
@@ -809,7 +1072,7 @@ function runLightDiagnostics(){
         i++;
         continue;
       }
-      if (ch === '/' && next === '/') break;
+    if (ch === '/' && next === '/'){ while (i < text.length && text[i] !== '\n') i++; continue; }
       if (ch === '"' || ch === "'"){
         quote = ch;
         stringStart = i + 1;
@@ -826,10 +1089,30 @@ function runLightDiagnostics(){
     const trimmed = stripLineComment(raw).trim();
     const codeTrimmed = code.trim();
     if (/^[A-Za-z_]\w*;?$/.test(codeTrimmed)){
-      const message = depthBeforeLine === 0
-        ? `Unexpected identifier '${codeTrimmed.replace(/;$/,'')}' at global scope. Did you forget a type, declaration, or comment marker?`
-        : `Standalone identifier '${codeTrimmed.replace(/;$/,'')}'. Did you forget a semicolon, assignment, or function call?`;
-      markers.push(marker(lineNo, raw.indexOf(codeTrimmed.replace(/;$/,'')) + 1, message, Severity.Error));
+      const ident = codeTrimmed.replace(/;$/,'');
+      let message;
+      if (depthBeforeLine === 0){
+        if (/^[A-Z]/.test(ident)){
+          message = `Unknown type or identifier '${ident}' at global scope. Did you mean a different type name, or forget to declare a variable? (e.g. 'int ${ident} = 0;')`;
+        } else if (declaredVars.has(ident)){
+          message = `Unexpected use of '${ident}' — variable name cannot appear alone. Did you mean ${ident} = ...; or ${ident}; (if it had a value)?`;
+        } else if (declaredFuncs.has(ident)){
+          message = `Unexpected function name '${ident}' alone. Did you forget to call it? (e.g. '${ident}();')`;
+        } else {
+          message = `Unknown identifier '${ident}' at global scope. Did you forget a type (e.g. 'int ${ident};') or include a header?`;
+        }
+      } else {
+        if (KNOWN_OBJECTS.has(ident)){
+          message = `'${ident}' needs a method call: e.g. '${ident}.begin();' or '${ident}.print(...)'`;
+        } else if (declaredFuncs.has(ident)){
+          message = `'${ident}' is a function — did you mean '${ident}();'?`;
+        } else if (declaredVars.has(ident)){
+          message = `'${ident}' is a variable — did you mean '${ident} = value;'?`;
+        } else {
+          message = `Unexpected identifier '${ident}'. Did you forget a semicolon, assignment, or do you have a typo?`;
+        }
+      }
+      markers.push(marker(lineNo, raw.indexOf(ident) + 1, message, Severity.Error));
     }
     if (/^#\s*include\b/.test(trimmed) && !/^#\s*include\s*(<[^>]+>|"[^"]+")/.test(trimmed)){
       markers.push(marker(lineNo, raw.indexOf('include') + 1, 'Expected #include <Header.h> or #include "Header.h"', Severity.Warning));
@@ -862,16 +1145,92 @@ function runLightDiagnostics(){
       { re:/\banalogwrite\s*\(/, msg:'Did you mean analogWrite(...) ?' },
       { re:/\bpinmode\s*\(/, msg:'Did you mean pinMode(...) ?' },
       { re:/\bDelay\s*\(/, msg:'Did you mean delay(...) ?' },
+      { re:/\bSerial\.printl\s*\(/, msg:'Did you mean Serial.println(...) ? (missing n)' },
+      { re:/\bSerial\.printLn\s*\(/, msg:'Did you mean Serial.println(...) ? (lowercase n)' },
+      { re:/\bSerial\.write\s*\(\s*\)/, msg:'Serial.write() needs at least one argument' },
     ];
     typoChecks.forEach(check=>{
       const match = raw.match(check.re);
       if (match) markers.push(marker(lineNo, match.index + 1, check.msg, Severity.Warning));
     });
+
+    // ── Call to undefined function ──────────────────────────────
+    const callRe = /\b([A-Za-z_]\w*)\s*\(/g;
+    let callMatch;
+    while ((callMatch = callRe.exec(code)) !== null){
+      const fname = callMatch[1];
+      // Skip control flow, types, and known/declared functions
+      if (/^(if|for|while|switch|catch|return|sizeof|int|float|double|char|byte|long|short|void|bool|String)$/.test(fname)) continue;
+      if (KNOWN_FUNCS.has(fname)) continue;
+      if (declaredFuncs.has(fname)) continue;
+      // obj.method() — skip if KNOWN_OBJECTS
+      if (callMatch.index > 0 && code[callMatch.index - 1] === '.') continue;
+      // Suggest likely function name if similar exists
+      let suggestion = '';
+      const similar = [...KNOWN_FUNCS].filter(f => f.length > 3 && (f.startsWith(fname) || fname.startsWith(f) || f.includes(fname) || fname.includes(f)));
+      if (similar.length) suggestion = ` Did you mean '${similar.slice(0, 3).join("' or '")}'?`;
+      markers.push(marker(lineNo, code.indexOf(fname) + 1, `Call to unknown function '${fname}()'. Function is not defined.${suggestion}`, Severity.Warning));
+    }
+
+    // ── if (x = 5) — assignment in condition ────────────────────
+    const ifAssignRe = /\bif\s*\([^)]*\b(\w+)\s*=\s*[^)=]/;
+    const ifMatch = raw.match(ifAssignRe);
+    if (ifMatch && !raw.includes('==') && !raw.includes('!=')){
+      markers.push(marker(lineNo, (ifMatch.index || 0) + 3, `Assignment (=) in condition. Did you mean == ?`, Severity.Warning));
+    }
+
+    // ── #define without value ────────────────────────────────────
+    const defRe = /^\s*#\s*define\s+(\w+)\s*$/;
+    const defMatch = raw.match(defRe);
+    if (defMatch){
+      markers.push(marker(lineNo, raw.indexOf('#define') + 1, `#define ${defMatch[1]} has no value`, Severity.Warning));
+    }
   });
 
   stack.slice(-30).forEach(item=>{
     markers.push(marker(item.line, item.col, `Unclosed '${item.ch}'`, Severity.Error));
   });
+
+  // ── Duplicate #include ────────────────────────────────────────────
+  const includeLines = [];
+  lines.forEach((raw, idx) => {
+    const m = raw.match(/^\s*#\s*include\s*[<"]([^>"]+)[>"]/);
+    if (m) includeLines.push({ header: m[1].toLowerCase(), lineNo: idx + 1, raw });
+  });
+  const seen = new Set();
+  includeLines.forEach(({ header, lineNo, raw }) => {
+    if (seen.has(header)){
+      const firstIdx = includeLines.findIndex(x => x.header === header);
+      markers.push(marker(lineNo, raw.search(/[<"]/) + 1, `Duplicate #include <${header}> (first at line ${includeLines[firstIdx].lineNo})`, Severity.Warning));
+    }
+    seen.add(header);
+  });
+
+  // ── Missing #include for popular libraries ────────────────────────
+  const libToHeader = {
+    'WiFi': 'WiFi.h', 'Wire': 'Wire.h', 'SPI': 'SPI.h', 'Servo': 'Servo.h',
+    'EEPROM': 'EEPROM.h', 'SD': 'SD.h', 'Preferences': 'Preferences.h',
+    'BLEDevice': 'BLEDevice.h', 'BLEScan': 'BLEDevice.h', 'BLEAdvertisedDevice': 'BLEDevice.h',
+    'WiFiClient': 'WiFi.h', 'WiFiServer': 'WiFi.h',
+    'HTTPClient': 'HTTPClient.h', 'WebServer': 'WebServer.h',
+    'DNSServer': 'DNSServer.h', 'ArduinoOTA': 'ArduinoOTA.h',
+    'Ticker': 'Ticker.h', 'NeoPixelBus': 'NeoPixelBus.h',
+    'Adafruit_NeoPixel': 'Adafruit_NeoPixel.h', 'LiquidCrystal': 'LiquidCrystal.h',
+    'LiquidCrystal_I2C': 'LiquidCrystal_I2C.h', 'DHT': 'DHT.h',
+  };
+  const lowerIncludes = new Set([...includes].map(i => i.toLowerCase()));
+  for (const [obj, header] of Object.entries(libToHeader)){
+    const includeRe = new RegExp(`\\b${obj}\\.`);
+    const incMatch = text.match(includeRe);
+    if (incMatch && !lowerIncludes.has(header.replace(/\.h$/i,'').toLowerCase())){
+      const matchIdx = incMatch.index;
+      const before = text.substring(0, matchIdx);
+      const lineNum = before.split('\n').length;
+      const lineStart = before.lastIndexOf('\n') + 1;
+      const col = matchIdx - lineStart + 1;
+      markers.push(marker(lineNum, col, `'${obj}' used but #include <${header}> is missing`, Severity.Warning));
+    }
+  }
 
   if (file.name === 'sketch.ino'){
     if (!/\bvoid\s+setup\s*\(\s*\)/.test(text)){
@@ -880,15 +1239,33 @@ function runLightDiagnostics(){
     if (!/\bvoid\s+loop\s*\(\s*\)/.test(text)){
       markers.push(marker(1, 1, 'Main sketch usually needs void loop()', Severity.Warning));
     }
+    if (/\b(int|void)\s+main\s*\(/.test(text)){
+      markers.push(marker(1, 1, 'Sketch has main() — did you mean setup() and loop() instead?', Severity.Warning));
+    }
   }
 
   monaco.editor.setModelMarkers(model, 'arduino-lite', markers);
+
+  // Update diagnostic badge + Problems panel
+  const errCount = markers.filter(m => m.severity === Severity.Error).length;
+  const warnCount = markers.filter(m => m.severity === Severity.Warning).length;
+  const badge = document.getElementById('diag-badge');
+  if (badge) {
+    badge.className = '';
+    badge.innerHTML = '';
+    if (errCount || warnCount) {
+      badge.className = errCount ? 'err' : 'warn';
+      badge.textContent = `✕ ${errCount}  ⚠ ${warnCount}`;
+    }
+  }
+  updateProblemsPanel(`Problems (${errCount} err · ${warnCount} warn)`, markers);
+
   return markers;
 }
 
 function scheduleDiagnostics(){
   clearTimeout(diagnosticsTimer);
-  diagnosticsTimer = setTimeout(runLightDiagnostics, 180);
+  diagnosticsTimer = setTimeout(runLightDiagnostics, 80);
 }
 
 function checkSyntax(){
@@ -900,18 +1277,31 @@ function checkSyntax(){
   const warnings = markers.filter(m=>m.severity === Severity.Warning);
 
   if (!markers.length){
-    setStatus('✓ Check OK', 'ok');
-    serialLog(`Check OK: ${currentFile().name}`, 'sys');
+    setStatus('✓ OK', 'ok');
     return true;
   }
 
   const summary = `${errors.length} error(s), ${warnings.length} warning(s)`;
-  setStatus((errors.length ? '✗ ' : '⚠ ') + summary, errors.length ? 'err' : 'run');
+  setStatus(errors.length ? `✗ ${summary}` : `⚠ ${summary}`, errors.length ? 'err' : 'run');
   serialLog(`Check ${currentFile().name}: ${summary}`, 'sys');
   markers.slice(0, 5).forEach(m=>{
     serialLog(`Line ${m.startLineNumber}: ${m.message}`, errors.includes(m) ? 'sys' : 'tx');
   });
   return errors.length === 0;
+}
+
+function focusFirstError(){
+  if (!editor || !window.monaco) return;
+  syncActiveFile();
+  clearTimeout(diagnosticsTimer);
+  const markers = runLightDiagnostics();
+  const err = markers.find(m => m.severity === monaco.MarkerSeverity.Error) ||
+              markers.find(m => m.severity === monaco.MarkerSeverity.Warning);
+  if (err){
+    editor.revealPositionInCenter({ lineNumber: err.startLineNumber, column: err.startColumn });
+    editor.setPosition({ lineNumber: err.startLineNumber, column: err.startColumn });
+    editor.focus();
+  }
 }
 
 function quickFixText(text){
@@ -922,63 +1312,346 @@ function quickFixText(text){
     [/\banalogwrite\b/g, 'analogWrite'],
     [/\bpinmode\b/g, 'pinMode'],
     [/\bDelay\b/g, 'delay'],
-    [/\boutput\b/g, 'OUTPUT'],
     [/\binput_pullup\b/g, 'INPUT_PULLUP'],
-    [/\binput\b/g, 'INPUT'],
-    [/\bhigh\b/g, 'HIGH'],
-    [/\blow\b/g, 'LOW']
+    [/\bINPUT_PULLDOWN\b/g, 'INPUT_PULLDOWN']
   ];
   return replacements.reduce((value, [from, to])=> value.replace(from, to), text);
 }
 
-function applyQuickFixes(){
-  if (!editor) return;
-  const before = editor.getValue();
-  const after = quickFixText(before);
-  if (before === after){
-    setStatus('No quick fixes', 'run');
-    return;
-  }
-  editor.setValue(after);
-  syncActiveFile();
-  saveProjectFiles();
-  scheduleDiagnostics();
-  setStatus('✓ Quick fixes applied', 'ok');
-  serialLog('Quick fixes applied to current file', 'sys');
-}
 
 require.config({ paths:{ vs:'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' }});
 require(['vs/editor/editor.main'], ()=>{
-  // Arduino autocomplete
-  monaco.languages.registerCompletionItemProvider('cpp',{
-    provideCompletionItems(){
-      const kw = monaco.languages.CompletionItemKind;
-      const s  = (label,insert,doc,kind=kw.Function)=>({
-        label, insertText:insert, documentation:doc, kind,
-        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
-      });
-      return { suggestions:[
-        s('pinMode','pinMode(${1:pin}, ${2:OUTPUT});','Configure pin as INPUT or OUTPUT'),
-        s('digitalWrite','digitalWrite(${1:pin}, ${2:HIGH});','Write HIGH or LOW to digital pin'),
-        s('digitalRead','digitalRead(${1:pin})','Read digital pin value',kw.Function),
-        s('analogWrite','analogWrite(${1:pin}, ${2:value});','Write PWM value 0-255'),
-        s('analogRead','analogRead(${1:A0})','Read analog pin 0-1023',kw.Function),
-        s('delay','delay(${1:1000});','Pause ms'),
-        s('millis','millis()','ms since boot',kw.Function),
-        s('Serial.begin','Serial.begin(${1:9600});','Init serial'),
-        s('Serial.print','Serial.print(${1:value});','Print'),
-        s('Serial.println','Serial.println(${1:value});','Print with newline'),
-        s('Serial.available','Serial.available()','Bytes waiting',kw.Function),
-        s('Serial.read','Serial.read()','Read byte',kw.Function),
-        s('pinMode + loop','void setup() {\n\t$0\n}\n\nvoid loop() {\n\t\n}','Sketch skeleton',kw.Snippet),
-        s('map','map(${1:value}, ${2:fromLow}, ${3:fromHigh}, ${4:toLow}, ${5:toHigh})','Remap value'),
-        s('constrain','constrain(${1:x}, ${2:min}, ${3:max})','Clamp value'),
-        ...['HIGH','LOW','INPUT','OUTPUT','INPUT_PULLUP','LED_BUILTIN','A0','A1','A2','A3','A4','A5','true','false']
-          .map(c=>s(c,c,'Arduino constant',kw.Constant)),
-      ]};
+  // ── Arduino Autocomplete ──────────────────────────────────────────
+  const kw = monaco.languages.CompletionItemKind;
+
+  function ap(line, doc){
+    return {
+      label: line,
+      insertText: line,
+      documentation: doc || '',
+      kind: kw.Function
+    };
+  }
+
+  function snip(label, insert, doc){
+    return {
+      label,
+      insertText: insert,
+      documentation: doc || '',
+      kind: kw.Snippet,
+      insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
+    };
+  }
+
+  function constant(label, doc){
+    return {
+      label,
+      insertText: label,
+      documentation: doc || '',
+      kind: kw.Constant
+    };
+  }
+
+  // ── Arduino Core Functions ────────────────────────────────
+  const ARDUINO_FUNCS = [
+    ap('pinMode(pin, mode)', 'Configure pin as INPUT, OUTPUT, or INPUT_PULLUP'),
+    ap('digitalWrite(pin, value)', 'Write HIGH or LOW to a digital pin'),
+    ap('digitalRead(pin)', 'Read the state of a digital pin (HIGH or LOW)'),
+    ap('analogWrite(pin, value)', 'Write PWM value (0-255) to a pin'),
+    ap('analogRead(pin)', 'Read analog voltage (0-1023 on AVR, 0-4095 on ESP32)'),
+    ap('analogReference(type)', 'Configure analog reference voltage (AVR only)'),
+    ap('delay(ms)', 'Pause program for given milliseconds'),
+    ap('delayMicroseconds(us)', 'Pause program for given microseconds'),
+    ap('millis()', 'Returns milliseconds since board started (unsigned long)'),
+    ap('micros()', 'Returns microseconds since board started (unsigned long)'),
+    ap('map(value, fromLow, fromHigh, toLow, toHigh)', 'Re-map a number from one range to another'),
+    ap('constrain(x, min, max)', 'Clamp a number to a range'),
+    ap('tone(pin, frequency)', 'Generate a square wave on a pin (with duration)'),
+    ap('noTone(pin)', 'Stop tone generation'),
+    ap('pulseIn(pin, value)', 'Read a pulse (HIGH or LOW) on a pin'),
+    ap('pulseInLong(pin, value)', 'Read longer pulses, calls yield() during read'),
+    ap('shiftOut(dataPin, clockPin, bitOrder, value)', 'Shift out a byte of data'),
+    ap('shiftIn(dataPin, clockPin, bitOrder)', 'Shift in a byte of data'),
+    ap('attachInterrupt(pin, ISR, mode)', 'Attach interrupt to a pin'),
+    ap('detachInterrupt(pin)', 'Detach interrupt from a pin'),
+    ap('interrupts()', 'Enable interrupts globally'),
+    ap('noInterrupts()', 'Disable interrupts globally'),
+    ap('random(max)', 'Generate pseudo-random number'),
+    ap('random(min, max)', 'Generate pseudo-random number in range'),
+    ap('randomSeed(seed)', 'Initialize pseudo-random number generator'),
+    ap('lowByte(x)', 'Extract low-order (rightmost) byte'),
+    ap('highByte(x)', 'Extract high-order (leftmost) byte'),
+    ap('bitRead(x, n)', 'Read a bit of a number'),
+    ap('bitSet(x, n)', 'Set a bit of a number'),
+    ap('bitClear(x, n)', 'Clear a bit of a number'),
+    ap('bitWrite(x, n, b)', 'Write a bit of a number'),
+    ap('bit(n)', 'Compute the value of bit n (2^n)'),
+    ap('abs(x)', 'Absolute value (macro)'),
+    ap('min(a, b)', 'Minimum of two values'),
+    ap('max(a, b)', 'Maximum of two values'),
+    ap('pow(base, exp)', 'Power function'),
+    ap('sqrt(x)', 'Square root'),
+    ap('sin(rad)', 'Sine (radians)'),
+    ap('cos(rad)', 'Cosine (radians)'),
+    ap('tan(rad)', 'Tangent (radians)'),
+    ap('degrees(rad)', 'Convert radians to degrees'),
+    ap('radians(deg)', 'Convert degrees to radians'),
+  ];
+
+  // ── Serial ────────────────────────────────────────────────────
+  const SERIAL_FUNCS = [
+    ap('Serial.begin(baud)', 'Initialize serial communication'),
+    ap('Serial.end()', 'Disable serial communication'),
+    ap('Serial.print(val)', 'Print data to serial port (ASCII)'),
+    ap('Serial.println(val)', 'Print data with newline'),
+    ap('Serial.write(val)', 'Write raw binary data'),
+    ap('Serial.available()', 'Get number of bytes available to read'),
+    ap('Serial.read()', 'Read one byte from serial buffer'),
+    ap('Serial.readBytes(buffer, length)', 'Read bytes into buffer'),
+    ap('Serial.readString()', 'Read string from serial (blocking)'),
+    ap('Serial.readStringUntil(terminator)', 'Read string until terminator'),
+    ap('Serial.parseInt()', 'Parse integer from serial'),
+    ap('Serial.parseFloat()', 'Parse float from serial'),
+    ap('Serial.peek()', 'Return next byte without removing it'),
+    ap('Serial.flush()', 'Wait for outgoing data to finish'),
+    ap('Serial.setTimeout(timeout)', 'Set read timeout in ms'),
+  ];
+
+  // ── Wire (I2C) ────────────────────────────────────────────────
+  const WIRE_FUNCS = [
+    ap('Wire.begin()', 'Join I2C bus as master'),
+    ap('Wire.begin(address)', 'Join I2C bus as slave with address'),
+    ap('Wire.requestFrom(address, count)', 'Request bytes from slave'),
+    ap('Wire.beginTransmission(address)', 'Start transmission to slave'),
+    ap('Wire.write(value)', 'Queue bytes for transmission'),
+    ap('Wire.endTransmission()', 'End transmission and send queued bytes'),
+    ap('Wire.available()', 'Return bytes available for reading'),
+    ap('Wire.read()', 'Read one byte'),
+    ap('Wire.setClock(clock)', 'Set I2C clock frequency'),
+    ap('Wire.onReceive(handler)', 'Register slave receive handler'),
+    ap('Wire.onRequest(handler)', 'Register slave request handler'),
+  ];
+
+  // ── SPI ──────────────────────────────────────────────────────
+  const SPI_FUNCS = [
+    ap('SPI.begin()', 'Initialize SPI bus'),
+    ap('SPI.end()', 'Disable SPI bus'),
+    ap('SPI.beginTransaction(settings)', 'Configure SPI settings'),
+    ap('SPI.endTransaction()', 'End SPI transaction'),
+    ap('SPI.transfer(val)', 'Send and receive one byte'),
+    ap('SPI.transfer16(val)', 'Send and receive two bytes'),
+    ap('SPI.transfer(buffer, size)', 'Transfer buffer of bytes'),
+  ];
+
+  // ── Servo ──────────────────────────────────────────────────────
+  const SERVO_FUNCS = [
+    ap('Servo.attach(pin)', 'Attach servo to pin (with min/max pulse)'),
+    ap('Servo.write(angle)', 'Set servo angle (0-180)'),
+    ap('Servo.writeMicroseconds(us)', 'Set pulse width in microseconds'),
+    ap('Servo.read()', 'Read current servo angle'),
+    ap('Servo.detach()', 'Detach servo from pin'),
+    ap('Servo.attached()', 'Check if servo is attached'),
+  ];
+
+  // ── EEPROM ────────────────────────────────────────────────────
+  const EEPROM_FUNCS = [
+    ap('EEPROM.read(address)', 'Read byte from EEPROM'),
+    ap('EEPROM.write(address, value)', 'Write byte to EEPROM'),
+    ap('EEPROM.update(address, value)', 'Update byte only if changed'),
+    ap('EEPROM.put(address, data)', 'Write any data type to EEPROM'),
+    ap('EEPROM.get(address, data)', 'Read any data type from EEPROM'),
+    ap('EEPROM.length()', 'Return EEPROM size in bytes'),
+  ];
+
+  // ── WiFi (ESP32) ──────────────────────────────────────────────
+  const WIFI_FUNCS = [
+    ap('WiFi.begin(ssid, pass)', 'Connect to Wi-Fi network'),
+    ap('WiFi.scanNetworks()', 'Scan for available networks'),
+    ap('WiFi.disconnect()', 'Disconnect from network'),
+    ap('WiFi.mode(mode)', 'Set Wi-Fi mode (WIFI_STA, WIFI_AP, WIFI_AP_STA)'),
+    ap('WiFi.softAP(ssid, pass)', 'Create access point'),
+    ap('WiFi.localIP()', 'Get local IP address'),
+    ap('WiFi.status()', 'Get connection status'),
+    ap('WiFi.RSSI()', 'Get signal strength in dBm'),
+    ap('WiFi.SSID()', 'Get current SSID'),
+    ap('WiFi.setHostname(name)', 'Set device hostname'),
+  ];
+
+  // ── Snippets ──────────────────────────────────────────────────
+  const SNIPPETS = [
+    snip('setup-loop', 'void setup() {\n\t$0\n}\n\nvoid loop() {\n\t\n}', 'Arduino sketch skeleton with setup() and loop()'),
+    snip('for', 'for (int $1 = 0; $1 < ${2:count}; $1${3:++}) {\n\t$0\n}', 'For loop'),
+    snip('class', 'class ${1:MyClass} {\npublic:\n\t$1() {}\n\tvoid begin();\nprivate:\n\tint _value;\n};\n\nvoid ${1:MyClass}::begin() {\n\t$0\n}', 'C++ class skeleton'),
+    snip('enum', 'enum ${1:State} {\n\t$2,\n\t$0\n};', 'Enum definition'),
+    snip('if', 'if (${1:condition}) {\n\t$0\n}', 'If statement'),
+    snip('if-else', 'if (${1:condition}) {\n\t$0\n} else {\n\t\n}', 'If-else statement'),
+    snip('while', 'while (${1:condition}) {\n\t$0\n}', 'While loop'),
+    snip('function', '${1:void} ${2:name}(${3:params}) {\n\t$0\n}', 'Function definition'),
+  ];
+
+  // ── Constants ──────────────────────────────────────────────────
+  const ARDUINO_CONSTS = [
+    constant('HIGH', 'Logic high level (1)'),
+    constant('LOW', 'Logic low level (0)'),
+    constant('INPUT', 'Digital pin as input'),
+    constant('OUTPUT', 'Digital pin as output'),
+    constant('INPUT_PULLUP', 'Digital pin as input with internal pull-up'),
+    constant('INPUT_PULLDOWN', 'Digital pin as input with internal pull-down (ESP32)'),
+    constant('LED_BUILTIN', 'Built-in LED pin number'),
+    constant('true', 'Boolean true'),
+    constant('false', 'Boolean false'),
+    constant('NULL', 'Null pointer'),
+    constant('PI', 'π constant (3.14159)'),
+    constant('HALF_PI', 'π/2 constant'),
+    constant('TWO_PI', '2π constant'),
+    constant('DEG_TO_RAD', 'Convert degrees to radians'),
+    constant('RAD_TO_DEG', 'Convert radians to degrees'),
+    constant('A0', 'Analog input pin 0'),
+    constant('A1', 'Analog input pin 1'),
+    constant('A2', 'Analog input pin 2'),
+    constant('A3', 'Analog input pin 3'),
+    constant('A4', 'Analog input pin 4 (SDA on Uno/Nano)'),
+    constant('A5', 'Analog input pin 5 (SCL on Uno/Nano)'),
+    constant('LSBFIRST', 'Least significant bit first'),
+    constant('MSBFIRST', 'Most significant bit first'),
+    constant('CHANGE', 'Trigger interrupt on pin change'),
+    constant('RISING', 'Trigger interrupt on rising edge'),
+    constant('FALLING', 'Trigger interrupt on falling edge'),
+    constant('SDA', 'I2C data pin'),
+    constant('SCL', 'I2C clock pin'),
+    constant('SS', 'SPI slave select pin'),
+    constant('MOSI', 'SPI master out / slave in pin'),
+    constant('MISO', 'SPI master in / slave out pin'),
+    constant('SCK', 'SPI serial clock pin'),
+    constant('WIFI_STA', 'Wi-Fi station mode'),
+    constant('WIFI_AP', 'Wi-Fi access point mode'),
+    constant('WIFI_AP_STA', 'Wi-Fi dual mode'),
+    constant('WL_CONNECTED', 'Wi-Fi connected status'),
+    constant('WL_DISCONNECTED', 'Wi-Fi disconnected status'),
+  ];
+
+  const ALL_SUGGESTIONS = [
+    ...ARDUINO_FUNCS,
+    ...SERIAL_FUNCS,
+    ...WIRE_FUNCS,
+    ...SPI_FUNCS,
+    ...SERVO_FUNCS,
+    ...EEPROM_FUNCS,
+    ...WIFI_FUNCS,
+    ...SNIPPETS,
+    ...ARDUINO_CONSTS,
+  ];
+
+  monaco.languages.registerCompletionItemProvider('cpp', {
+    provideCompletionItems(model, position){
+      const fullText = model.getValue();
+      const isArduino = /#include\s*[<"]Arduino\.h[>"]/.test(fullText) ||
+                        /\bvoid\s+(setup|loop)\s*\(/.test(fullText) ||
+                        /\bpinMode\s*\(/.test(fullText) ||
+                        /\bdigitalWrite\s*\(/.test(fullText) ||
+                        projectFiles.some(f => f.name === activeFile && /\.ino$/i.test(f.name));
+
+      if (!isArduino) return { suggestions: [] };
+
+      return { suggestions: ALL_SUGGESTIONS };
     }
   });
 
+  // ── Signature Help (parameter hints) ──────────────────────────
+  monaco.languages.registerSignatureHelpProvider('cpp', {
+    signatureHelpTriggerCharacters: ['(', ','],
+    signatureHelpRetriggerCharacters: [','],
+    provideSignatureHelp(model, position){
+      const line = model.getLineContent(position.lineNumber);
+      const callMatch = line.match(/(\w+(?:\.\w+)?)\s*\(/);
+      if (!callMatch) return { value: { signatures: [], activeSignature: 0, activeParameter: 0 }, dispose(){} };
+
+      const SIGNATURES = {
+        'pinMode': { params: ['pin: uint8_t', 'mode: uint8_t (INPUT/OUTPUT/INPUT_PULLUP)'] },
+        'digitalWrite': { params: ['pin: uint8_t', 'value: uint8_t (HIGH/LOW)'] },
+        'digitalRead': { params: ['pin: uint8_t'] },
+        'analogWrite': { params: ['pin: uint8_t', 'value: int (0-255)'] },
+        'analogRead': { params: ['pin: uint8_t'] },
+        'delay': { params: ['ms: unsigned long'] },
+        'millis': { params: [] },
+        'map': { params: ['value', 'fromLow', 'fromHigh', 'toLow', 'toHigh'] },
+        'constrain': { params: ['x', 'min', 'max'] },
+        'Serial.begin': { params: ['baud: long (9600, 115200, etc.)'] },
+        'Serial.print': { params: ['val: any'] },
+        'Serial.println': { params: ['val: any'] },
+        'Serial.available': { params: [] },
+        'Serial.read': { params: [] },
+        'Serial.write': { params: ['val: uint8_t | buffer, length'] },
+        'tone': { params: ['pin: uint8_t', 'frequency: unsigned int', 'duration: unsigned long (optional)'] },
+        'attachInterrupt': { params: ['pin: uint8_t', 'ISR: void(*)()', 'mode: int (RISING/FALLING/CHANGE)'] },
+        'WiFi.begin': { params: ['ssid: const char*', 'password: const char* (optional)'] },
+        'WiFi.scanNetworks': { params: [] },
+        'WiFi.localIP': { params: [] },
+        'WiFi.RSSI': { params: [] },
+        'Wire.begin': { params: ['address: uint8_t (optional for master)'] },
+        'Wire.requestFrom': { params: ['address: uint8_t', 'count: int'] },
+        'Wire.write': { params: ['data: uint8_t | string'] },
+        'Wire.read': { params: [] },
+      };
+
+      const sig = SIGNATURES[callMatch[1]];
+      if (!sig) return { value: { signatures: [], activeSignature: 0, activeParameter: 0 }, dispose(){} };
+
+      const params = sig.params.map((p, i) => ({
+        label: p,
+        documentation: ''
+      }));
+
+      const signature = {
+        label: `${callMatch[1]}(${sig.params.join(', ')})`,
+        documentation: '',
+        parameters: params,
+        activeParameter: 0
+      };
+
+      return {
+        value: { signatures: [signature], activeSignature: 0, activeParameter: 0 },
+        dispose(){}
+      };
+    }
+  });
+
+  // ── Hover Documentation ────────────────────────────────────────
+  monaco.languages.registerHoverProvider('cpp', {
+    provideHover(model, position){
+      const word = model.getWordAtPosition(position);
+      if (!word) return null;
+
+      const TEXT = {
+        'pinMode': 'Configure a digital pin as INPUT, OUTPUT, or INPUT_PULLUP.\n\n`pinMode(pin, mode)`\n- **pin**: The number of the pin to configure\n- **mode**: INPUT, OUTPUT, or INPUT_PULLUP',
+        'digitalWrite': 'Write a HIGH or LOW value to a digital pin.\n\n`digitalWrite(pin, value)`',
+        'digitalRead': 'Read the current state of a digital pin (HIGH or LOW).\n\n`digitalRead(pin)`',
+        'analogWrite': 'Write an analog value (PWM wave) to a pin.\n\n`analogWrite(pin, value)`\n- value: 0 (always off) to 255 (always on)',
+        'analogRead': 'Read the analog voltage on a pin.\n\n`analogRead(pin)`\n- AVR: 0-1023, ESP32: 0-4095',
+        'delay': 'Pause the program for the specified milliseconds.\n\n`delay(ms)`\n- ms: unsigned long (max ~4.2 billion)',
+        'millis': 'Returns the number of milliseconds since the board began running.\n\n`millis()` → unsigned long (rolls over after ~50 days)',
+        'map': 'Re-maps a number from one range to another.\n\n`map(value, fromLow, fromHigh, toLow, toHigh)`',
+        'constrain': 'Constrains a number to be within a range.\n\n`constrain(x, min, max)`',
+        'Serial': 'Serial object for communication over USB/UART.\n\nMethods: begin(), print(), println(), read(), available(), write()',
+        'HIGH': 'Logic high level (voltage HIGH, typically 5V or 3.3V)',
+        'LOW': 'Logic low level (voltage LOW, ~0V)',
+        'INPUT': 'Configure pin as digital input (high impedance)',
+        'OUTPUT': 'Configure pin as digital output',
+        'INPUT_PULLUP': 'Configure pin as input with internal pull-up resistor enabled',
+        'LED_BUILTIN': 'The pin number connected to the board\'s built-in LED (usually pin 13 on AVR, pin 2 on ESP32)',
+      };
+
+      const text = TEXT[word.word];
+      if (!text) return null;
+
+      return {
+        contents: [{ value: text }]
+      };
+    }
+  });
+
+  const skeleton = document.getElementById('editor-skeleton');
+  if (skeleton) skeleton.remove();
   editor = monaco.editor.create(document.getElementById('editor'),{
     value: currentFile().content,
     language:'cpp',
@@ -991,27 +1664,57 @@ require(['vs/editor/editor.main'], ()=>{
     quickSuggestions:true,
   });
 
+  function makeFixAction(title, lineNo, newText, model, uri){
+    return {
+      title,
+      kind: 'quickfix',
+      edit: {
+        edits: [{
+          resource: uri,
+          edit: {
+            range: new monaco.Range(lineNo, 1, lineNo, model.getLineMaxColumn(lineNo)),
+            text: newText
+          }
+        }]
+      },
+      isPreferred: true
+    };
+  }
+
   monaco.languages.registerCodeActionProvider('cpp', {
     provideCodeActions(model, range){
       const lineNo = range.startLineNumber;
       const line = model.getLineContent(lineNo);
+      const uri = model.uri;
+      const actions = [];
+
+      // Arduino typo quick fix
       const fixed = quickFixText(line);
-      if (fixed === line) return { actions:[], dispose(){} };
-      return {
-        actions:[{
-          title:'Apply Arduino quick fix',
-          kind:'quickfix',
-          edit:{ edits:[{
-            resource:model.uri,
-            edit:{
-              range:new monaco.Range(lineNo, 1, lineNo, line.length + 1),
-              text:fixed
-            }
-          }]},
-          isPreferred:true
-        }],
-        dispose(){}
-      };
+      if (fixed !== line){
+        actions.push(makeFixAction('Fix Arduino typo', lineNo, fixed, model, uri));
+      }
+
+      // Fix assignment in condition: if (x = 5) -> if (x == 5)
+      const ifAssignRe = /\bif\s*\(([^)]*)\b(\w+)\s*=\s*([^)=][^)]*)/;
+      const ifMatch = line.match(ifAssignRe);
+      if (ifMatch && !line.includes('==') && !line.includes('!=')){
+        const newLine = line.replace(/(\bif\s*\([^)]*)\b(\w+)\s*=\s*(?=[^)])/, '$1$2 == ');
+        actions.push(makeFixAction('Replace = with == in condition', lineNo, newLine, model, uri));
+      }
+
+      // Remove duplicate #include
+      const incMatch = line.match(/^\s*#\s*include\s*[<"]([^>"]+)[>"]/);
+      if (incMatch){
+        const header = incMatch[1].toLowerCase();
+        const fullText = model.getValue();
+        const firstIdx = fullText.search(new RegExp(`^\\s*#\\s*include\\s*[<"]${header.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[>"]`, 'm'));
+        const thisLineStart = fullText.split('\n').slice(0, lineNo - 1).join('\n').length + (lineNo > 1 ? 1 : 0);
+        if (firstIdx >= 0 && firstIdx !== thisLineStart){
+          actions.push(makeFixAction('Remove duplicate #include', lineNo, '', model, uri));
+        }
+      }
+
+      return { actions, dispose(){} };
     }
   });
 
@@ -1042,9 +1745,25 @@ require(['vs/editor/editor.main'], ()=>{
   runLightDiagnostics();
   restoreSharedProject();
 
-  // Shortcut: Ctrl+Enter = compile
+  // Shortcut: Ctrl+Shift+Enter = diagnostics, Ctrl+Enter = compile
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter, checkSyntax);
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, compile);
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF, formatCode);
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, ()=>{ syncActiveFile(); saveProjectFiles(); setStatus('✓ Saved', 'ok'); });
+  editor.addCommand(monaco.KeyCode.F8, focusFirstError);
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.US_SLASH, showShortcuts);
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyL, ()=>{ document.getElementById('lib-search')?.focus(); openLibs(); });
+});
+// Tab switch with Ctrl+Tab (global)
+document.addEventListener('keydown', e=>{
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Tab'){
+    e.preventDefault();
+    const files = projectFiles;
+    const idx = files.findIndex(f=>f.name === activeFile);
+    const next = files[(idx + 1) % files.length];
+    if (next) switchFile(next.name);
+  }
+  if (e.key === 'Escape'){ hideFileContextMenu(); hideShortcuts(); hideEditorSettings(); }
 });
 
 const DEFAULT_SKETCH = `// Arduino Sketch
@@ -1079,6 +1798,175 @@ void loop() {
   delay(1000);
   digitalWrite(LED_BUILTIN, LOW);
   delay(1000);
+}`
+    }]
+  },
+  fade: {
+    board:'uno|arduino:avr:uno',
+    files:[{
+      name:'sketch.ino',
+      content:`// Fade — PWM LED fade example
+int led = 9;
+int brightness = 0;
+int fadeStep = 5;
+
+void setup() {
+  pinMode(led, OUTPUT);
+}
+
+void loop() {
+  analogWrite(led, brightness);
+  brightness += fadeStep;
+  if (brightness <= 0 || brightness >= 255) fadeStep = -fadeStep;
+  delay(30);
+}`
+    }]
+  },
+  button: {
+    board:'uno|arduino:avr:uno',
+    files:[{
+      name:'sketch.ino',
+      content:`// Button — digital read with pull-up
+const int buttonPin = 2;
+const int ledPin = 13;
+int buttonState = 0;
+int lastState = HIGH;
+int count = 0;
+
+void setup() {
+  pinMode(buttonPin, INPUT_PULLUP);
+  pinMode(ledPin, OUTPUT);
+  Serial.begin(9600);
+  Serial.println("Press the button");
+}
+
+void loop() {
+  buttonState = digitalRead(buttonPin);
+  if (buttonState == LOW && lastState == HIGH) {
+    count++;
+    Serial.print("Pressed ");
+    Serial.println(count);
+    digitalWrite(ledPin, !digitalRead(ledPin));
+  }
+  lastState = buttonState;
+  delay(20);
+}`
+    }]
+  },
+  'analog-read': {
+    board:'uno|arduino:avr:uno',
+    files:[{
+      name:'sketch.ino',
+      content:`// Analog Read Serial — read potentiometer
+int potPin = A0;
+int val = 0;
+
+void setup() {
+  Serial.begin(9600);
+}
+
+void loop() {
+  val = analogRead(potPin);
+  int mv = map(val, 0, 1023, 0, 5000);
+  Serial.print("ADC: ");
+  Serial.print(val);
+  Serial.print("  mV: ");
+  Serial.println(mv);
+  delay(100);
+}`
+    }]
+  },
+  'tone-melody': {
+    board:'uno|arduino:avr:uno',
+    files:[{
+      name:'sketch.ino',
+      content:`// Tone Melody — piezo buzzer
+int speakerPin = 8;
+
+int melody[] = { 262, 294, 330, 349, 392, 440, 494, 523 };
+int noteDurations[] = { 200, 200, 200, 200, 200, 200, 200, 400 };
+
+void setup() {
+  for (int i = 0; i < 8; i++) {
+    tone(speakerPin, melody[i], noteDurations[i]);
+    delay(noteDurations[i] + 50);
+    noTone(speakerPin);
+  }
+  delay(1000);
+}
+
+void loop() {
+  // repeat after setup
+  setup();
+  while(1);
+}`
+    }]
+  },
+  ultrasonic: {
+    board:'uno|arduino:avr:uno',
+    files:[{
+      name:'sketch.ino',
+      content:`// Ultrasonic Distance — HC-SR04
+const int trigPin = 9;
+const int echoPin = 10;
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+}
+
+void loop() {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  long duration = pulseIn(echoPin, HIGH, 30000);
+  float cm = duration * 0.034 / 2;
+
+  Serial.print("Distance: ");
+  Serial.print(cm);
+  Serial.println(" cm");
+  delay(500);
+}`
+    }]
+  },
+  'dht-sensor': {
+    board:'uno|arduino:avr:uno',
+    files:[{
+      name:'sketch.ino',
+      content:`// DHT Sensor — temperature and humidity
+// Install library: DHT sensor library by Adafruit
+#include <DHT.h>
+
+#define DHTPIN 2
+#define DHTTYPE DHT11
+
+DHT dht(DHTPIN, DHTTYPE);
+
+void setup() {
+  Serial.begin(9600);
+  dht.begin();
+  Serial.println("DHT sensor ready");
+}
+
+void loop() {
+  delay(2000);
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+
+  if (isnan(h) || isnan(t)) {
+    Serial.println("Sensor error");
+    return;
+  }
+
+  Serial.print("Humidity: ");
+  Serial.print(h);
+  Serial.print("%  Temp: ");
+  Serial.print(t);
+  Serial.println(" C");
 }`
     }]
   },
@@ -1210,6 +2098,184 @@ void loop() {
   delay(1000);
 }`
     }]
+  },
+  'deep-sleep': {
+    board:'esp32|esp32:esp32:esp32doit-devkit-v1',
+    files:[{
+      name:'sketch.ino',
+      content:`// Deep Sleep — wake up by timer
+#include <esp_sleep.h>
+
+#define uS_TO_S 1000000ULL
+int sleepSeconds = 10;
+
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+
+  Serial.printf("Awake! Reason: %d\\n", esp_sleep_get_wakeup_cause());
+
+  // Print wakeup reason
+  switch (esp_sleep_get_wakeup_cause()){
+    case ESP_SLEEP_WAKEUP_TIMER:
+      Serial.println("Woke by timer"); break;
+    default:
+      Serial.println("Power-on reset"); break;
+  }
+
+  // Deep sleep
+  Serial.printf("Sleeping for %d s\\n", sleepSeconds);
+  esp_sleep_enable_timer_wakeup(sleepSeconds * uS_TO_S);
+  esp_deep_sleep_start();
+}
+
+void loop() {}`
+    }]
+  },
+  'touch-read': {
+    board:'esp32|esp32:esp32:esp32doit-devkit-v1',
+    files:[{
+      name:'sketch.ino',
+      content:`// Touch Read — capacitive touch sensor
+// Connect a wire to GPIO 4 (T0) for touch input
+int touchPin = T0;
+int threshold = 40;
+int ledPin = 2;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(ledPin, OUTPUT);
+  Serial.println("Touch sensor ready");
+}
+
+void loop() {
+  int val = touchRead(touchPin);
+  Serial.println(val);
+
+  if (val < threshold) {
+    digitalWrite(ledPin, HIGH);
+    Serial.println("--> Touched");
+  } else {
+    digitalWrite(ledPin, LOW);
+  }
+
+  delay(100);
+}`
+    }]
+  },
+  'servo-sweep': {
+    board:'esp32|esp32:esp32:esp32doit-devkit-v1',
+    files:[{
+      name:'sketch.ino',
+      content:`// Servo Sweep
+#include <Servo.h>
+
+Servo servo;
+int pos = 0;
+
+void setup() {
+  servo.attach(13);
+  Serial.begin(115200);
+  Serial.println("Servo sweep");
+}
+
+void loop() {
+  for (pos = 0; pos <= 180; pos++) {
+    servo.write(pos);
+    delay(10);
+  }
+  for (pos = 180; pos >= 0; pos--) {
+    servo.write(pos);
+    delay(10);
+  }
+}`
+    }]
+  },
+  'mqtt-publish': {
+    board:'esp32|esp32:esp32:esp32doit-devkit-v1',
+    files:[{
+      name:'sketch.ino',
+      content:`// MQTT Publish — connect to broker and publish
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include "secrets.h"
+
+const char* mqttServer = "broker.hivemq.com";
+const int mqttPort = 1883;
+
+WiFiClient espClient;
+PubSubClient mqtt(espClient);
+
+void setup() {
+  Serial.begin(115200);
+  WiFi.begin(SECRET_SSID, SECRET_PASS);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\\nWiFi OK");
+
+  mqtt.setServer(mqttServer, mqttPort);
+  while (!mqtt.connected()) {
+    if (mqtt.connect("ESP32Client")) {
+      Serial.println("MQTT connected");
+    } else {
+      delay(1000);
+    }
+  }
+}
+
+void loop() {
+  if (!mqtt.connected()) return;
+  mqtt.loop();
+
+  mqtt.publish("arduino/test", "hello from ESP32");
+  Serial.println("Published");
+  delay(5000);
+}`
+    }]
+  },
+  'ntp-time': {
+    board:'esp32|esp32:esp32:esp32doit-devkit-v1',
+    files:[{
+      name:'sketch.ino',
+      content:`// NTP Time — get current time from NTP server
+#include <WiFi.h>
+#include "secrets.h"
+
+const char* ntpServer = "pool.ntp.org";
+const long gmtOffset = 0;
+const int daylightOffset = 3600;
+
+void setup() {
+  Serial.begin(115200);
+  WiFi.begin(SECRET_SSID, SECRET_PASS);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\\nWiFi OK");
+
+  configTime(gmtOffset, daylightOffset, ntpServer);
+  Serial.println("Waiting for NTP...");
+}
+
+void loop() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    Serial.println("Time not synced yet");
+    delay(1000);
+    return;
+  }
+
+  char buf[64];
+  strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S %A", &timeinfo);
+  Serial.println(buf);
+  delay(1000);
+}`
+    }]
   }
 };
 
@@ -1270,6 +2336,146 @@ function loadExample(key){
   applyProject(example.files);
   setStatus('✓ Example loaded', 'ok');
   serialLog('Example loaded', 'sys');
+}
+
+// ── Keyboard Shortcuts ─────────────────────────────────────────────
+function showShortcuts(){
+  document.getElementById('shortcuts-overlay').classList.add('open');
+}
+function hideShortcuts(){
+  document.getElementById('shortcuts-overlay').classList.remove('open');
+}
+
+// ── Editor Settings ────────────────────────────────────────────────
+function showEditorSettings(){
+  const s = document.getElementById('settings-overlay');
+  document.getElementById('settings-font-size').value = editor?.getRawOptions().fontSize || 14;
+  document.getElementById('settings-tab-size').value = editor?.getRawOptions().tabSize || 4;
+  document.getElementById('settings-word-wrap').value = editor?.getRawOptions().wordWrap || 'off';
+  document.getElementById('settings-line-numbers').value = editor?.getRawOptions().lineNumbers || 'on';
+  document.getElementById('settings-minimap').value = localStorage.getItem('editorMinimap') === '1' ? '1' : '0';
+  s.classList.add('open');
+}
+function hideEditorSettings(){
+  document.getElementById('settings-overlay').classList.remove('open');
+}
+function applyEditorSettings(){
+  if (!editor) return;
+  const fontSize = parseInt(document.getElementById('settings-font-size').value) || 14;
+  const tabSize = parseInt(document.getElementById('settings-tab-size').value) || 4;
+  const wordWrap = document.getElementById('settings-word-wrap').value;
+  const lineNumbers = document.getElementById('settings-line-numbers').value;
+  const minimap = document.getElementById('settings-minimap').value;
+  editor.updateOptions({ fontSize, tabSize, wordWrap, lineNumbers });
+  localStorage.setItem('editorMinimap', minimap);
+  setMinimap(minimap === '1');
+  hideEditorSettings();
+  saveProjectFiles();
+}
+
+// ── File Context Menu ──────────────────────────────────────────────
+let contextMenuFile = null;
+function showFileContextMenu(e, fileName){
+  if (fileName === 'sketch.ino') return;
+  e.preventDefault();
+  e.stopPropagation();
+  contextMenuFile = fileName;
+  const menu = document.getElementById('file-context-menu');
+  menu.style.left = Math.min(e.clientX, window.innerWidth - 160) + 'px';
+  menu.style.top = Math.min(e.clientY, window.innerHeight - 80) + 'px';
+  menu.classList.add('open');
+}
+function hideFileContextMenu(){
+  document.getElementById('file-context-menu').classList.remove('open');
+  contextMenuFile = null;
+}
+function contextMenuRename(){
+  if (!contextMenuFile) return;
+  const file = projectFiles.find(f => f.name === contextMenuFile);
+  if (!file) return;
+  const newName = prompt('Rename file:', file.name);
+  if (newName && newName.trim() && newName !== file.name){
+    const safe = uniqueFileName(newName.trim());
+    if (safe && safe !== file.name){
+      const wasActive = activeFile === file.name;
+      file.name = safe;
+      if (wasActive) activeFile = safe;
+      renderFileTabs();
+      saveProjectFiles();
+    }
+  }
+  hideFileContextMenu();
+}
+function contextMenuDelete(){
+  if (!contextMenuFile) return;
+  if (confirm(`Delete "${contextMenuFile}"?`)){
+    removeProjectFile(contextMenuFile);
+  }
+  hideFileContextMenu();
+}
+
+// ── Format Code ────────────────────────────────────────────────────
+function formatCode(){
+  if (!editor) return;
+  syncActiveFile();
+  const file = currentFile();
+  if (!file || !isCodeFile(file.name)) return;
+  let text = file.content;
+  const original = text;
+  // Basic formatter: fix indentation, spaces around braces, trailing whitespace
+  text = text.replace(/[ \t]+$/gm, '');
+  text = text.replace(/\r\n/g, '\n');
+  text = text.replace(/\n{3,}/g, '\n\n');
+  // Ensure space after keywords: if( → if (, for( → for (, while( → while (
+  text = text.replace(/\b(if|for|while|switch|catch)\s*\(/g, '$1 (');
+  // Space after comma in function args (not inside strings)
+  text = text.replace(/,\s*(?![^"]*"(?:(?:[^"]*"){2})*[^"]*$)/g, ', ');
+  // Space around operators (simple cases)
+  text = text.replace(/\b(for|if|while|do)\s*\(/g, '$1 (');
+  // Fix brace on same line as control structures
+  text = text.replace(/(\b(?:if|else|for|while|do|switch))\s*\{/g, '$1 {');
+  // Remove double spaces (but not indentation)
+  text = text.replace(/^(\s*)\S/gm);
+  
+  if (text !== original){
+    file.content = text;
+    editor.setValue(text);
+    saveProjectFiles();
+    serialLog('Code formatted', 'sys');
+    setStatus('✓ Formatted', 'ok');
+  } else {
+    setStatus('No formatting changes', 'run');
+  }
+}
+
+// ── Export Arduino IDE ─────────────────────────────────────────────
+function exportArduinoIde(){
+  syncActiveFile();
+  const projectName = (projectFiles.find(f=>f.name==='sketch.ino') ? 'sketch' : projectFiles[0].name.replace(/\.[^.]+$/,'')) || 'arduino_project';
+  const folderName = projectName.replace(/[^a-zA-Z0-9_-]/g, '_') || 'arduino_project';
+  const mainName = folderName + '.ino';
+
+  const renamed = projectFiles.map(f => ({
+    name: f.name === 'sketch.ino' ? mainName : f.name,
+    content: f.content
+  }));
+
+  if (typeof JSZip !== 'undefined'){
+    const zip = new JSZip();
+    const folder = zip.folder(folderName);
+    renamed.forEach(f => folder.file(f.name, f.content));
+    zip.generateAsync({ type: 'blob' }).then(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = folderName + '.zip';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      serialLog('Exported Arduino IDE project: ' + folderName + '.zip', 'sys');
+      setStatus('✓ Exported as Arduino IDE project', 'ok');
+    });
+  } else {
+    exportProjectZip();
+  }
 }
 
 function bytesToBase64Url(bytes){
@@ -2224,10 +3430,6 @@ function clearEspToolBusy(){
   document.querySelectorAll('.esp-tool-control').forEach(el=>{ el.disabled = false; });
 }
 
-function ru(strings, ...values){
-  return strings.reduce((out, part, index)=> out + part + (values[index] ?? ''), '');
-}
-
 function loadEsptoolModule(){
   if (!esptoolModulePromise){
     esptoolModulePromise = import('https://unpkg.com/esptool-js/lib/index.js');
@@ -2265,7 +3467,7 @@ async function eraseEspFlash(){
   if (!confirm('Erase the entire ESP flash chip? This removes firmware, NVS, EEPROM data and filesystem.')) return;
   try {
     setStatus('Erasing flash...', 'run');
-    setEspToolBusy(true, ru`\u0421\u0442\u0438\u0440\u0430\u044e \u043f\u0430\u043c\u044f\u0442\u044c \u0447\u0438\u043f\u0430, \u043f\u043e\u0436\u0430\u043b\u0443\u0439\u0441\u0442\u0430, \u043d\u0435 \u043e\u0442\u043a\u043b\u044e\u0447\u0430\u0439\u0442\u0435 \u043a\u0430\u0431\u0435\u043b\u044c. \u041d\u0430 ESP32 \u0441 8-16 MB flash \u044d\u0442\u043e \u043c\u043e\u0436\u0435\u0442 \u0437\u0430\u043d\u044f\u0442\u044c 5-15 \u0441\u0435\u043a\u0443\u043d\u0434.`);
+    setEspToolBusy(true, 'Erasing flash chip — do not disconnect cable. On ESP32 with 8-16 MB flash this may take 5-15 seconds.');
     await withEspLoader(loader=>loader.eraseFlash());
     setStatus('✓ Flash erased', 'ok');
     setEspToolMessage('Flash erased. You can flash firmware again now.', 'ok');
@@ -2366,7 +3568,7 @@ async function flashFsImage(){
     const offset = parseHexOrDecimal(document.getElementById('fs-offset').value);
     const data = new Uint8Array(await fsImageFile.arrayBuffer());
     setStatus('Flashing FS...', 'run');
-    setEspToolBusy(true, ru`\u0417\u0430\u043b\u0438\u0432\u0430\u044e \u043e\u0431\u0440\u0430\u0437 \u0444\u0430\u0439\u043b\u043e\u0432\u043e\u0439 \u0441\u0438\u0441\u0442\u0435\u043c\u044b. \u041d\u0435 \u043e\u0442\u043a\u043b\u044e\u0447\u0430\u0439\u0442\u0435 ESP32 \u0434\u043e \u043e\u043a\u043e\u043d\u0447\u0430\u043d\u0438\u044f \u0437\u0430\u043f\u0438\u0441\u0438.`);
+    setEspToolBusy(true, 'Flashing filesystem image. Do not disconnect ESP32 until complete.');
     await withEspLoader(loader=>loader.writeFlash({
       fileArray:[{ data, address:offset }],
       flashMode:'dio',
@@ -2376,7 +3578,7 @@ async function flashFsImage(){
       compress:true,
       reportProgress:(_, written, total)=>{
         setStatus(`FS ${Math.round(written / total * 100)}%`, 'run');
-        setEspToolBusy(true, ru`\u0417\u0430\u043b\u0438\u0432\u0430\u044e \u043e\u0431\u0440\u0430\u0437 \u0444\u0430\u0439\u043b\u043e\u0432\u043e\u0439 \u0441\u0438\u0441\u0442\u0435\u043c\u044b: ${Math.round(written / total * 100)}%. \u041d\u0435 \u043e\u0442\u043a\u043b\u044e\u0447\u0430\u0439\u0442\u0435 \u043a\u0430\u0431\u0435\u043b\u044c.`);
+        setEspToolBusy(true, `Flashing filesystem: ${Math.round(written / total * 100)}%. Do not disconnect cable.`);
       }
     }));
     setStatus('✓ FS flashed', 'ok');
@@ -2418,7 +3620,7 @@ async function uploadOta(){
   }
   try {
     setStatus('Uploading OTA...', 'run');
-    setEspToolBusy(true, ru`\u041e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u044e \u043f\u0440\u043e\u0448\u0438\u0432\u043a\u0443 \u043f\u043e Wi-Fi. \u0423\u0431\u0435\u0434\u0438\u0442\u0435\u0441\u044c, \u0447\u0442\u043e \u0442\u0435\u043b\u0435\u0444\u043e\u043d/\u041f\u041a \u0438 ESP32 \u0432 \u043e\u0434\u043d\u043e\u0439 \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u043e\u0439 \u0441\u0435\u0442\u0438.`);
+    setEspToolBusy(true, 'Uploading firmware over Wi-Fi. Make sure your device and ESP32 are on the same network.');
     const res = await fetch(url, {
       method:'POST',
       body:await latestOtaBlob()
@@ -2428,7 +3630,7 @@ async function uploadOta(){
     setEspToolMessage('OTA upload complete. ESP32 may reboot now.', 'ok');
     serialLog('OTA upload complete', 'sys');
   } catch(e){
-    const localHint = ru`\u0423\u0431\u0435\u0434\u0438\u0442\u0435\u0441\u044c, \u0447\u0442\u043e \u0442\u0435\u043b\u0435\u0444\u043e\u043d/\u041f\u041a \u0438 \u043f\u043b\u0430\u0442\u0430 \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u044b \u043a \u043e\u0434\u043d\u043e\u0439 Wi-Fi \u0441\u0435\u0442\u0438, \u0430 \u0430\u0434\u0440\u0435\u0441 ESP32 \u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d \u0438\u0437 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0430.`;
+    const localHint = 'Make sure your device and board are on the same Wi-Fi network, and the ESP32 address is reachable from the browser.';
     setStatus('✗ OTA failed', 'err');
     setEspToolMessage(`OTA failed: ${e.message}. ${localHint}`, 'err');
     serialLog('OTA error: ' + e.message + '. ' + localHint, 'sys');
@@ -2476,13 +3678,15 @@ const PINOUTS = {
   ]
 };
 
-function renderPinout(){
+function renderPinout(filter){
   const { board } = boardInfo();
   const grid = document.getElementById('pinout-grid');
   if (!grid) return;
   const pins = PINOUTS[board] || PINOUTS.esp32;
+  const q = (filter || document.getElementById('pinout-search')?.value || '').toLowerCase();
   grid.innerHTML = '';
-  pins.forEach(([pin, note])=>{
+  pins.filter(([pin, note]) => !q || pin.toLowerCase().includes(q) || note.toLowerCase().includes(q))
+    .forEach(([pin, note])=>{
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'pin-btn';
@@ -2494,6 +3698,7 @@ function renderPinout(){
     };
     grid.appendChild(btn);
   });
+  if (!grid.children.length) grid.innerHTML = '<span style="color:var(--muted);font-size:12px;grid-column:1/-1;text-align:center;padding:16px">No pins match filter</span>';
 }
 
 function togglePinout(){
@@ -2609,7 +3814,8 @@ function hexOffset(kb){
 }
 
 function csvSize(kb){
-  return kb >= 1024 && kb % 1024 === 0 ? `${kb / 1024}M` : `${kb}K`;
+  if (kb >= 1024 && (kb & (kb - 1)) === 0 && kb % 1024 === 0) return `${kb / 1024}M`;
+  return `${kb}K`;
 }
 
 function partitionState(){
@@ -2716,10 +3922,25 @@ function onBoardChange(){
 let latestHexUrl = '';
 let latestManifestUrl = '';
 
+function showToast(msg, type='ok', duration=3500){
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  const close = document.createElement('button');
+  close.className = 'toast-close';
+  close.textContent = '×';
+  close.onclick = () => { el.classList.remove('show'); setTimeout(() => el.remove(), 400); };
+  el.append(close, msg);
+  container.appendChild(el);
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 400); }, duration);
+}
+
 function setStatus(msg, type){
   const el = document.getElementById('tb-status');
   el.textContent = msg;
   el.className = type;
+  showToast(msg, type);
 }
 
 let buildPollTimer = null;
@@ -2738,6 +3959,16 @@ function buildStepLabel(step){
   return step.name;
 }
 
+function updateBuildProgressBar(fraction, status){
+  const bar = document.getElementById('build-progress-bar');
+  if (!bar) return;
+  bar.style.width = `${Math.min(100, Math.round(fraction * 100))}%`;
+  bar.className = '';
+  if (status === 'fail') bar.classList.add('fail');
+  else if (status === 'done') bar.classList.add('done');
+  else bar.style.background = 'var(--green)';
+}
+
 function renderBuildProgress(data){
   const box = document.getElementById('build-progress');
   const state = document.getElementById('build-state');
@@ -2749,6 +3980,7 @@ function renderBuildProgress(data){
     state.textContent = data.message || 'Waiting for GitHub Actions...';
     steps.innerHTML = '<div class="build-step run"><span class="build-dot"></span><span>Waiting for workflow run</span></div>';
     link.style.display = 'none';
+    updateBuildProgressBar(0.05, 'run');
     return;
   }
 
@@ -2771,6 +4003,18 @@ function renderBuildProgress(data){
     steps.appendChild(row);
   });
 
+  const totalSteps = allSteps.length;
+  const doneSteps = allSteps.filter(s => s.status === 'completed').length;
+  const failed = allSteps.some(s => s.conclusion === 'failure' || s.conclusion === 'cancelled' || s.conclusion === 'timed_out');
+
+  if (data.status === 'completed'){
+    updateBuildProgressBar(1, failed ? 'fail' : 'done');
+  } else if (totalSteps > 0){
+    updateBuildProgressBar(doneSteps / totalSteps * 0.9, 'run');
+  } else {
+    updateBuildProgressBar(0.1, 'run');
+  }
+
   const stepKey = allSteps.map(step=>`${step.name}:${step.status}:${step.conclusion || ''}`).join('|');
   if (stepKey && stepKey !== lastBuildStepKey){
     lastBuildStepKey = stepKey;
@@ -2780,9 +4024,42 @@ function renderBuildProgress(data){
   }
 }
 
+let currentRequestId = null;
+let currentRunId = null;
+
+const CANCEL_API = '/api/cancel';
+const LOGS_API = '/api/logs';
+
+async function cancelBuild(){
+  if (!currentRunId){
+    setStatus('No active build to cancel', 'err');
+    return;
+  }
+  try {
+    setStatus('Cancelling build…', 'run');
+    const res = await fetch(CANCEL_API, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ run_id: currentRunId })
+    });
+    const data = await res.json();
+    if (data.success){
+      clearInterval(buildPollTimer);
+      document.getElementById('cancel-build-btn').style.display = 'none';
+      setStatus('✓ Build cancelled', 'ok');
+      serialLog('Build cancelled by user', 'sys');
+    } else {
+      setStatus('✗ Cancel failed: ' + (data.error || 'Unknown error'), 'err');
+    }
+  } catch(e){
+    setStatus('✗ Cancel error: ' + e.message, 'err');
+  }
+}
+
 async function pollBuildStatus(requestId){
   clearInterval(buildPollTimer);
   lastBuildStepKey = '';
+  currentRequestId = requestId;
 
   const tick = async ()=>{
     try {
@@ -2791,15 +4068,23 @@ async function pollBuildStatus(requestId){
       if (!data.success) throw new Error(data.error || 'Status failed');
       renderBuildProgress(data);
 
+      if (data.found && data.run_id) currentRunId = data.run_id;
+      if (data.found && data.status !== 'completed' && data.status !== 'waiting'){
+        document.getElementById('cancel-build-btn').style.display = 'block';
+      }
+
       if (data.found && data.status === 'completed'){
         clearInterval(buildPollTimer);
+        document.getElementById('cancel-build-btn').style.display = 'none';
+        currentRunId = null;
         if (data.conclusion === 'success'){
           setStatus('✓ Build complete', 'ok');
           serialLog('Build complete — firmware URLs refreshed', 'sys');
           refreshFlashUrls();
         } else {
           setStatus('✗ Build ' + (data.conclusion || 'failed'), 'err');
-          serialLog('Build failed — open Actions for logs', 'sys');
+          serialLog('Build failed — parsing logs for errors…', 'sys');
+          parseBuildErrors(data.run_id);
         }
       }
     } catch(e){
@@ -2810,6 +4095,56 @@ async function pollBuildStatus(requestId){
 
   await tick();
   buildPollTimer = setInterval(tick, 4000);
+}
+
+// ── Compile Error Parsing ──────────────────────────────────────────
+async function parseBuildErrors(runId){
+  try {
+    const res = await fetch(`${LOGS_API}?run_id=${encodeURIComponent(runId)}`);
+    const data = await res.json();
+    if (!data.success || !data.entries.length){
+      serialLog('No parseable errors found in build log', 'sys');
+      return;
+    }
+
+    let problemsHtml = '';
+    const model = editor?.getModel();
+    const markers = [];
+
+    for (const entry of data.entries){
+      const source = (entry.file && entry.file !== 'unknown') ? entry.file : 'sketch.ino';
+      problemsHtml += `<div class="problem-entry ${entry.type}">
+        <span class="problem-file">${source}</span>
+        <span class="problem-pos">${entry.line}:${entry.column}</span>
+        <span class="problem-msg">${entry.message}</span>
+      </div>`;
+
+      if (model){
+        markers.push({
+          severity: entry.type === 'error' ? monaco.MarkerSeverity.Error : monaco.MarkerSeverity.Warning,
+          message: entry.message,
+          startLineNumber: entry.line,
+          startColumn: entry.column || 1,
+          endLineNumber: entry.line,
+          endColumn: (entry.column || 1) + 20
+        });
+      }
+    }
+
+    // Update Problems panel
+    const list = document.getElementById('problems-list');
+    if (list) list.innerHTML = problemsHtml;
+    const pane = document.getElementById('problems-pane');
+    if (pane) pane.classList.add('open');
+
+    // Add Monaco markers
+    if (model && monaco) monaco.editor.setModelMarkers(model, 'compile', markers);
+
+    serialLog(`Found ${data.entries.filter(e=>e.type==='error').length} errors in build log`, 'sys');
+
+  } catch(e){
+    serialLog('Error parsing build logs: ' + e.message, 'sys');
+  }
 }
 
 async function compile(){
@@ -2827,6 +4162,7 @@ async function compile(){
   btn.disabled = true;
   btn.textContent = '…';
   setStatus('Compiling…', 'run');
+  updateBuildProgressBar(0, 'run');
 
   try {
     const res  = await fetch(API, {
@@ -2876,6 +4212,7 @@ function refreshFlashUrls(){
   } else {
     document.getElementById('flash-avr-btn').setAttribute('hex-href', latestHexUrl);
   }
+  serialLog(`Flash URL updated: ${isESP(board) ? 'manifest' : 'hex'}`, 'sys');
 }
 
 async function downloadHex(){
@@ -2961,6 +4298,16 @@ async function downloadEspBins(){
 window.addEventListener('load', ()=>{
   refreshFlashUrls();
   onBoardChange();
+
+  // Show a warning if Web Serial is not available
+  const serialUnsupported = !navigator.serial;
+  document.querySelectorAll('#flash-avr-btn, esp-web-install-button [slot=activate], #sc-connect').forEach(el => {
+    if (serialUnsupported) el.title = 'Web Serial API not supported in this browser. Use Chrome or Edge.';
+  });
+  if (serialUnsupported) {
+    const flashNote = document.getElementById('flash-note');
+    if (flashNote) flashNote.textContent = '⚠ Web Serial not supported — use Chrome or Edge for flashing.';
+  }
 });
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -2972,9 +4319,11 @@ function serialLog(text, cls='rx'){
   const out = document.getElementById('serial-out');
   const div = document.createElement('div');
   div.className = 'serial-' + cls;
-  div.textContent = text;
+  const showTime = document.getElementById('serial-timestamps')?.checked;
+  div.textContent = showTime ? `[${new Date().toLocaleTimeString()}] ${text}` : text;
   out.appendChild(div);
-  out.scrollTop = out.scrollHeight;
+  const autoScroll = document.getElementById('serial-autoscroll');
+  if (!autoScroll || autoScroll.checked) out.scrollTop = out.scrollHeight;
 }
 
 async function serialConnect(){
@@ -2991,6 +4340,8 @@ async function serialConnect(){
     document.getElementById('serial-send').disabled   = false;
     document.getElementById('sc-connect').classList.remove('active');
     document.getElementById('sc-disconnect').classList.add('active');
+    const dot = document.getElementById('serial-status-dot');
+    if (dot) { dot.style.background = 'var(--green)'; dot.title = 'Connected'; }
     serialReading = true;
     readSerial();
   } catch(e){
@@ -3009,7 +4360,7 @@ async function readSerial(){
       buf += dec.decode(value);
       const lines = buf.split('\n');
       buf = lines.pop();
-      lines.forEach(l => l && serialLog(l, 'rx'));
+      lines.forEach(l => { if (l) { serialLog(l, 'rx'); addPlotterData(l); } });
     }
   } catch(e){ if(serialReading) serialLog('Read error: '+e.message,'sys'); }
 }
@@ -3027,6 +4378,8 @@ async function serialDisconnect(){
   document.getElementById('serial-send').disabled   = true;
   document.getElementById('sc-connect').classList.remove('active');
   document.getElementById('sc-disconnect').classList.remove('active');
+  const dot = document.getElementById('serial-status-dot');
+  if (dot) { dot.style.background = 'var(--muted)'; dot.title = 'Disconnected'; }
 }
 
 async function serialSend(){
@@ -3106,7 +4459,102 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
 });
 
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.appendChild(document.createTextNode(String(str)));
+  return div.innerHTML;
+}
+
+function installLibrary(libName){
+  const index = _libIndex || LIBS;
+  const lib = index.find(l => l.name === libName);
+  if (lib) addLib(lib);
+}
+
 function serialClear(){ document.getElementById('serial-out').innerHTML=''; }
+
+// ── Serial Plotter ────────────────────────────────────────────────
+let plotterEnabled = false;
+let plotterSeries = [];
+const PLOTTER_MAX = 200;
+
+function togglePlotter(on){
+  plotterEnabled = on;
+  document.getElementById('serial-plotter-wrap').classList.toggle('open', on);
+  if (on) plotterSeries = [];
+}
+
+function clearPlotter(){
+  plotterSeries = [];
+  drawPlotter();
+}
+
+function addPlotterData(text){
+  if (!plotterEnabled) return;
+  const nums = text.split(',').map(s => parseFloat(s.trim())).filter(n => Number.isFinite(n));
+  if (!nums.length) return;
+  plotterSeries.push(nums);
+  if (plotterSeries.length > PLOTTER_MAX) plotterSeries.shift();
+  drawPlotter();
+}
+
+function drawPlotter(){
+  const canvas = document.getElementById('serial-plotter');
+  if (!canvas || !plotterSeries.length) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  const w = rect.width, h = rect.height;
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#0d1117';
+  ctx.fillRect(0, 0, w, h);
+
+  if (!plotterSeries.length) return;
+  const seriesCount = plotterSeries[0].length;
+  if (!seriesCount) return;
+
+  let min = Infinity, max = -Infinity;
+  for (const row of plotterSeries){
+    for (const v of row){
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+  }
+  const range = max - min || 1;
+  const padding = range * 0.1;
+  min -= padding;
+  max += padding;
+
+  const colors = ['#00e676','#2196f3','#ff9800','#f44336','#e040fb','#00bcd4'];
+  const xStep = w / PLOTTER_MAX;
+
+  for (let s = 0; s < seriesCount; s++){
+    ctx.strokeStyle = colors[s % colors.length];
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i < plotterSeries.length; i++){
+      const val = plotterSeries[i][s];
+      if (val === undefined) continue;
+      const x = i * xStep;
+      const y = h - ((val - min) / range) * h;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth = 0.5;
+  for (let i = 1; i < 5; i++){
+    const y = (h / 5) * i;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+  }
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Library Manager
@@ -3533,5 +4981,86 @@ window.addEventListener('load',()=>{
   });
 });
 </script>
+
+<!-- Keyboard Shortcuts -->
+<div class="shortcuts-overlay" id="shortcuts-overlay" onclick="if (event.target === this) hideShortcuts()">
+  <div class="shortcuts-box">
+    <div class="shortcuts-header">
+      <h2>⌨ Keyboard Shortcuts</h2>
+      <button class="lib-close" onclick="hideShortcuts()">✕</button>
+    </div>
+    <div class="shortcuts-body">
+      <div class="shortcut-row"><span>Toggle file tabs</span><span class="shortcut-keys"><span class="shortcut-key">Ctrl</span><span class="shortcut-key">Tab</span></span></div>
+      <div class="shortcut-row"><span>Compile sketch</span><span class="shortcut-keys"><span class="shortcut-key">Ctrl</span><span class="shortcut-key">Enter</span></span></div>
+      <div class="shortcut-row"><span>Check syntax</span><span class="shortcut-keys"><span class="shortcut-key">Ctrl</span><span class="shortcut-key">Shift</span><span class="shortcut-key">Enter</span></span></div>
+      <div class="shortcut-row"><span>Format code</span><span class="shortcut-keys"><span class="shortcut-key">Ctrl</span><span class="shortcut-key">Shift</span><span class="shortcut-key">F</span></span></div>
+      <div class="shortcut-row"><span>Save (auto-saves on edit)</span><span class="shortcut-keys"><span class="shortcut-key">Ctrl</span><span class="shortcut-key">S</span></span></div>
+      <div class="shortcut-row"><span>Jump to first error</span><span class="shortcut-keys"><span class="shortcut-key">F8</span></span></div>
+      <div class="shortcut-row"><span>Show keyboard shortcuts</span><span class="shortcut-keys"><span class="shortcut-key">Ctrl</span><span class="shortcut-key">/</span></span></div>
+      <div class="shortcut-row"><span>Rename file (double-click tab)</span><span class="shortcut-keys"><span class="shortcut-key">Double-click</span></span></div>
+      <div class="shortcut-row"><span>Right-click file tab for menu</span><span class="shortcut-keys"><span class="shortcut-key">Right-click</span></span></div>
+      <div class="shortcut-row"><span>Search libraries</span><span class="shortcut-keys"><span class="shortcut-key">Ctrl</span><span class="shortcut-key">L</span></span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Editor Settings -->
+<div class="settings-overlay" id="settings-overlay" onclick="if (event.target === this) hideEditorSettings()">
+  <div class="settings-box">
+    <div class="settings-header">
+      <h2>⚙ Editor Settings</h2>
+      <button class="lib-close" onclick="hideEditorSettings()">✕</button>
+    </div>
+    <div class="settings-body">
+      <div class="settings-row">
+        <label>Font Size</label>
+        <input type="number" id="settings-font-size" min="10" max="30" step="1" value="14">
+      </div>
+      <div class="settings-row">
+        <label>Tab Size</label>
+        <select id="settings-tab-size">
+          <option value="2">2</option>
+          <option value="4" selected>4</option>
+          <option value="8">8</option>
+        </select>
+      </div>
+      <div class="settings-row">
+        <label>Word Wrap</label>
+        <select id="settings-word-wrap">
+          <option value="off">Off</option>
+          <option value="on">On</option>
+          <option value="bounded">Bounded</option>
+        </select>
+      </div>
+      <div class="settings-row">
+        <label>Line Numbers</label>
+        <select id="settings-line-numbers">
+          <option value="on">On</option>
+          <option value="off">Off</option>
+          <option value="relative">Relative</option>
+        </select>
+      </div>
+      <div class="settings-row">
+        <label>Minimap</label>
+        <select id="settings-minimap">
+          <option value="0">Off</option>
+          <option value="1" selected>On</option>
+        </select>
+      </div>
+    </div>
+    <div class="settings-actions">
+      <button class="settings-btn ghost" onclick="hideEditorSettings()">Cancel</button>
+      <button class="settings-btn primary" onclick="applyEditorSettings()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- File Context Menu -->
+<div id="file-context-menu" onclick="hideFileContextMenu()">
+  <div class="ctx-item" id="ctx-rename" onclick="contextMenuRename()">✏ Rename</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item danger" id="ctx-delete" onclick="contextMenuDelete()">✕ Delete</div>
+</div>
+
 </body>
 </html>
