@@ -2434,9 +2434,7 @@ function formatCode(){
   text = text.replace(/\b(for|if|while|do)\s*\(/g, '$1 (');
   // Fix brace on same line as control structures
   text = text.replace(/(\b(?:if|else|for|while|do|switch))\s*\{/g, '$1 {');
-  // Remove double spaces (but not indentation)
-  text = text.replace(/^(\s*)\S/gm);
-  
+
   if (text !== original){
     file.content = text;
     editor.setValue(text);
