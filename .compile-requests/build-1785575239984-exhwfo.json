@@ -1,0 +1,1 @@
+{"code":"// C++ code\r\n//\r\nvoid setup()\r\n{\r\n  pinMode(LED_BUILTIN, OUTPUT);\r\n}\r\n\r\nvoid loop()\r\n{\r\n  digitalWrite(LED_BUILTIN, HIGH);\r\n  delay(1000); // Wait for 1000 millisecond(s)\r\n  digitalWrite(LED_BUILTIN, LOW);\r\n  delay(1000); // Wait for 1000 millisecond(s)\r\n}","files":[],"features":{"smartWifi":false}}
