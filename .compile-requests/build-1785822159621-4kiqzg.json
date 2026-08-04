@@ -1,0 +1,1 @@
+{"code":"#include <Servo.h>\n// robot dog\nServo servo_1;\nServo servo_2;\n\nvoid setup() {\n  servo_1.attach(2);\n  servo_1.attach(3);\n}\n\nvoid loop() {\n  servo_1.write(90)\n}","files":[],"features":{"smartWifi":false}}
