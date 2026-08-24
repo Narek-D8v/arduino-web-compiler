@@ -1,1 +1,0 @@
-{"code":"#include <TFT_eSPI.h>\nTFT_eSPI tft = TFT_eSPI();\n\nvoid setup() {\n  tft.init();\n  tft.setRotation(1);\n  tft.fillScreen(TFT_BLACK);\n  tft.drawRect(10, 10, 100, 50, TFT_RED); // Рисуем красный прямоугольник\n}\n\nvoid loop() {}","files":[],"features":{"smartWifi":false}}
