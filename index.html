@@ -59,10 +59,11 @@ select.tb-sel:focus{outline:none;border-color:var(--blue)}
 /* ── Editor ── */
 #editor-wrap{display:flex;flex-direction:column;height:100%;overflow:hidden}
 #filebar{display:flex;align-items:center;gap:6px;min-height:36px;padding:6px 8px;background:var(--bg1);border-bottom:1px solid var(--border);overflow-x:auto}
-.file-tab{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--muted);font-family:var(--mono);font-size:12px;cursor:pointer;white-space:nowrap}
+.file-tab{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--muted);font-family:var(--mono);font-size:12px;cursor:pointer;white-space:nowrap;max-width:190px;overflow:hidden}
 .file-tab.active{background:rgba(33,150,243,.14);border-color:var(--blue);color:var(--text)}
-.file-tab button{border:none;background:transparent;color:var(--muted);font-size:13px;line-height:1;cursor:pointer;padding:0}
-.file-tab button:hover{color:var(--red)}
+.file-tab .file-tab-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.file-tab button,.file-tab .file-tab-close{border:none;background:transparent;color:var(--muted);font-size:13px;line-height:1;cursor:pointer;padding:0}
+.file-tab button:hover,.file-tab .file-tab-close:hover{color:var(--red)}
 .file-action{height:24px;padding:0 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg3);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
 .file-action:hover{border-color:var(--blue)}
 #editor{flex:1;min-height:0;position:relative}
@@ -681,6 +682,8 @@ getFflate().then(() => {
 const BUILDS  = 'https://raw.githubusercontent.com/Narek-D8v/arduino-web-compiler/builds';
 const API     = '/api/compile';
 const STATUS_API = '/api/status';
+const MAX_CODE_BYTES = 1000000;
+const MAX_FILE_BYTES = 1000000;
 let deferredInstallPrompt = null;
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
@@ -732,9 +735,15 @@ function loadProjectFiles(){
 }
 
 function saveProjectFiles(){
-  localStorage.setItem('projectFiles', JSON.stringify(projectFiles));
-  const main = projectFiles.find(f=>f.name === 'sketch.ino') || projectFiles[0];
-  localStorage.setItem('sketch', main?.content || '');
+  try {
+    localStorage.setItem('projectFiles', JSON.stringify(projectFiles));
+    const main = projectFiles.find(f=>f.name === 'sketch.ino') || projectFiles[0];
+    try { localStorage.setItem('sketch', main?.content || ''); } catch(_){}
+  } catch(e){
+    console.error('localStorage quota exceeded:', e);
+    setStatus('⚠ Storage full — project files may not persist', 'err');
+    serialLog('Warning: localStorage quota exceeded — project may not be saved', 'sys');
+  }
 }
 
 function sanitizeFileName(name){
@@ -814,14 +823,27 @@ function renderFileTabs(){
     icon.textContent = fileIcon(file.name);
     icon.style.marginRight = '4px';
     tab.prepend(icon);
+    const label = document.createElement('span');
+    label.className = 'file-tab-label';
+    label.textContent = file.name;
+    tab.appendChild(label);
     if (file.name !== 'sketch.ino'){
-      const close = document.createElement('button');
-      close.type = 'button';
+      const close = document.createElement('span');
+      close.className = 'file-tab-close';
+      close.role = 'button';
+      close.tabIndex = 0;
       close.textContent = '×';
       close.title = 'Remove file';
       close.onclick = e=>{
         e.stopPropagation();
         removeProjectFile(file.name);
+      };
+      close.onkeydown = e=>{
+        if (e.key === 'Enter' || e.key === ' '){
+          e.stopPropagation();
+          e.preventDefault();
+          removeProjectFile(file.name);
+        }
       };
       tab.appendChild(close);
     }
@@ -873,10 +895,17 @@ function removeProjectFile(name){
 async function attachProjectFiles(input){
   syncActiveFile();
   const files = [...input.files];
+  const enc = new TextEncoder();
+  const oversized = [];
   for (const file of files){
     const name = uniqueFileName(file.name);
     const content = await file.text();
+    if (enc.encode(content).length > MAX_FILE_BYTES) oversized.push(`${name} (${(enc.encode(content).length / 1024).toFixed(0)} KB)`);
     projectFiles.push({ name, content });
+  }
+  if (oversized.length){
+    setStatus('⚠ Large file: ' + oversized.join(', '), 'err');
+    serialLog(`Warning: ${oversized.join(', ')} exceed the ${Math.round(MAX_FILE_BYTES / 1024)} KB limit — the compiler will truncate the file and the build may fail.`, 'sys');
   }
   if (files.length){
     activeFile = projectFiles[projectFiles.length - 1].name;
@@ -4075,6 +4104,19 @@ async function compile(){
   const smartWifi = getSmartWifiConfig();
   smartWifi.enabled = smartWifi.enabled && isESP(board);
   const btn  = document.getElementById('compile-btn');
+
+  const enc = new TextEncoder();
+  const oversized = [];
+  if (enc.encode(code).length > MAX_CODE_BYTES) oversized.push(`sketch.ino (${(enc.encode(code).length / 1024).toFixed(0)} KB)`);
+  for (const f of files){
+    const size = enc.encode(f.content).length;
+    if (size > MAX_FILE_BYTES) oversized.push(`${f.name} (${(size / 1024).toFixed(0)} KB)`);
+  }
+  if (oversized.length){
+    setStatus('✗ File too large: ' + oversized.join(', '), 'err');
+    serialLog(`Compile blocked: ${oversized.join(', ')} exceed the ${Math.round(MAX_FILE_BYTES / 1024)} KB limit. The server truncates oversized files and the build would fail.`, 'sys');
+    return;
+  }
 
   btn.disabled = true;
   btn.textContent = '…';

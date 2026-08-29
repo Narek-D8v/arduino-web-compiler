@@ -3,8 +3,8 @@ const REPO_NAME = process.env.GITHUB_REPO || 'arduino-web-compiler';
 const REPO_BRANCH = process.env.GITHUB_BRANCH || 'main';
 
 const ALLOWED_BOARDS = new Set(['uno', 'nano', 'mega', 'esp32', 'esp32-s3', 'esp32-c3']);
-const MAX_CODE_BYTES = 300000;
-const MAX_FILE_BYTES = 180000;
+const MAX_CODE_BYTES = 1000000;
+const MAX_FILE_BYTES = 1000000;
 const MAX_FILES = 40;
 
 function setCors(res) {
@@ -93,7 +93,7 @@ module.exports = async (req, res) => {
 
     try {
         const { code, files, secrets, board, fqbn, timestamp, features, smartWifi } = req.body || {};
-        const cleanCode = cleanText(code, MAX_CODE_BYTES, '');
+        const cleanCode = String(code ?? '').replace(/\0/g, '');
 
         if (!cleanCode.trim()) {
             return res.status(400).json({
@@ -102,12 +102,28 @@ module.exports = async (req, res) => {
             });
         }
 
-        const cleanFiles = Array.isArray(files)
-            ? files.slice(0, MAX_FILES).map(file => ({
-                name: cleanFileName(file && file.name),
-                content: cleanText(file && file.content, MAX_FILE_BYTES, '')
-            })).filter(file => file.name)
-            : [];
+        if (cleanCode.length > MAX_CODE_BYTES) {
+            return res.status(400).json({
+                success: false,
+                error: `Sketch exceeds the ${MAX_CODE_BYTES} character limit (${cleanCode.length} characters). Please reduce the sketch size.`
+            });
+        }
+
+        const cleanFiles = [];
+        if (Array.isArray(files)) {
+            for (const file of files.slice(0, MAX_FILES)) {
+                const name = cleanFileName(file && file.name);
+                if (!name) continue;
+                const content = String((file && file.content) ?? '').replace(/\0/g, '');
+                if (content.length > MAX_FILE_BYTES) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `File "${name}" exceeds the ${MAX_FILE_BYTES} character limit (${content.length} characters). Please reduce or split the file.`
+                    });
+                }
+                cleanFiles.push({ name, content });
+            }
+        }
 
         const cleanSecrets = secrets && typeof secrets === 'object' ? {
             WIFI_SSID: cleanText(secrets.WIFI_SSID, 512, ''),
