@@ -1,0 +1,1 @@
+{"code":"// Arduino Sketch\nvoid setup() {\n  String text = \"+CLIP: +79201161922\";\n    \n    int pos = text.indexOf(\" \");\n    String num = text.substring(pos+1);\n  \n  Serial.println(num);\n}\n\nvoid loop() {\n\n}","files":[],"features":{"smartWifi":false}}
