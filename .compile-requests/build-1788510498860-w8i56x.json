@@ -1,0 +1,1 @@
+{"code":"void setup() { pinMode(2, OUTPUT); // Пин 2 обычно управляет синим светодиодом на ESP32 Dev Board } void loop() { digitalWrite(2, HIGH); delay(500); digitalWrite(2, LOW); delay(500); }","files":[],"features":{"smartWifi":false}}
