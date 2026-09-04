@@ -1,1 +1,0 @@
-{"code":"// Абсолютный минимум для проверки веб-компилятора\nvoid setup() {\n  pinMode(2, OUTPUT); // Пин 2 обычно управляет синим светодиодом на ESP32 Dev Board\n}\n\nvoid loop() {\n  digitalWrite(2, HIGH);\n  delay(500);\n  digitalWrite(2, LOW);\n  delay(500);\n}","files":[],"features":{"smartWifi":false}}
