@@ -1,0 +1,1 @@
+{"code":"// Arduino Sketch\nvoid setup() {\n  pinMode(8, OUTPUT);\n  Serial.begin(9600);\n  Serial.println(\"Hello!\");\n}\n\nvoid loop() {\n  digitalWrite(8, HIGH);\n  delay(1000);\n  digitalWrite(8, LOW);\n  delay(1000);\n}","files":[],"features":{"smartWifi":false}}
