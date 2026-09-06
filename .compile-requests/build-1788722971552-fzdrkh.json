@@ -1,1 +1,0 @@
-{"code":"void setup() {\n  pinMode(13, OUTPUT); // Инициализируем пин 13 как выход\n}\n\nvoid loop() {\n  digitalWrite(13, HIGH); // Включаем светодиод (высокий уровень)\n  delay(1000); // Ждём 1 секунду\n  digitalWrite(13, LOW); // Выключаем светодиод (низкий уровень)\n  delay(1000); // Ждём 1 секунду\n}","files":[],"features":{"smartWifi":false}}
