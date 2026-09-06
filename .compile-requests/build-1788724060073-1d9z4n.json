@@ -1,1 +1,0 @@
-{"code":"void setup() {\r\n  // Настраиваем пин 13 как выход\r\n  pinMode(13, OUTPUT);\r\n  // Подаём высокий уровень (5В) — светодиод загорается\r\n  digitalWrite(13, HIGH);\r\n}\r\n\r\nvoid loop() {\r\n  // Ничего не делаем, просто держим светодиод включённым\r\n}","files":[],"features":{"smartWifi":false}}
