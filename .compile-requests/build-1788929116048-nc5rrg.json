@@ -1,0 +1,1 @@
+{"code":"#include <arduino-ds1302.git.h>\nint led = 12;\n\nvoid setup()\n\n{\n\npinMode(led, OUTPUT);\n\n}\n\nvoid loop()\n\n{\n\ndigitalWrite(led, HIGH);\n\ndelay(1000);\n\ndigitalWrite(led, LOW);\n\ndelay(1000);\n\n}","files":[],"features":{"smartWifi":false}}
