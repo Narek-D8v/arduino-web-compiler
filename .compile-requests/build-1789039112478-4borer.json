@@ -1,0 +1,1 @@
+{"code":" void setup() \n{\n  pinMode(LED_BUILTIN, OUTPUT); // Настраиваем пин встроенного светодиода как выход\n}\n\n void loop() \n{\n  digitalWrite(LED_BUILTIN, HIGH); // Включаем светодиод\n  delay(1000);\n  digitalWrite(LED_BUILTIN, LOW); // Выключаем светодиод\n  delay(1000);\n}","files":[],"features":{"smartWifi":false}}
