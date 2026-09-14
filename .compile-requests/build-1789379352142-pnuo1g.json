@@ -1,1 +1,0 @@
-{"code":"#include <Servo.h>\n\nServo myServo;\n\nvoid setup() {\n  myServo.attach(9);\n}\n\nvoid loop() {\n  myServo.write(0);\n  delay(1000);\n\n  myServo.write(90);\n  delay(1000);\n}\n","files":[],"features":{"smartWifi":false}}
