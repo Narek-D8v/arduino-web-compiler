@@ -1,0 +1,1 @@
+{"code":"const int LED=9; // Константа - номер контакта светодиода\n\nvoid setup ()\n{\npinМode (LED,OUTPUT); // Конфигурируем контакт светодиода как //выход\ndigitalWrite(LED, HIGH); // Устанавливаем значение HIGH на выходе\n}\nvoid loop() {\n// В цикле ничего не выполняем\n}\n","files":[],"features":{"smartWifi":false}}
