@@ -1,0 +1,1 @@
+{"code":"// Analog Read Serial — read potentiometer\nint potPin = A0;\nint val = 0;\n\nvoid setup() {\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  val = analogRead(potPin);\n  int mv = map(val, 0, 1023, 0, 5000);\n  Serial.print(\"ADC: \");\n  Serial.print(val);\n  Serial.print(\"  mV: \");\n  Serial.println(mv);\n  delay(100);\n}","files":[],"features":{"smartWifi":false}}
