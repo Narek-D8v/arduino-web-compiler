@@ -1,0 +1,1 @@
+{"code":"void setup() {\n  pinMode(2, OUTPUT);\n\n  Serial.begin(115200);\n  delay(1000);\n\n  Serial.println(\"ESP32 OK!\");\n}\n\nvoid loop() {\n  digitalWrite(2, HIGH);\n  Serial.println(\"LED ON\");\n  delay(1000);\n\n  digitalWrite(2, LOW);\n  Serial.println(\"LED OFF\");\n  delay(1000);\n}","files":[],"features":{"smartWifi":false}}
