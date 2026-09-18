@@ -1,0 +1,1 @@
+{"code":"// Arduino Sketch\nvoid setup() {\n  Serial.begin(9600);\n  Serial.println(\"Hello!\");\n}\n\nvoid loop() {\n  int raw = analogRead(A0);\n  Serial.print(\"Значение К\")\n  Serial.println(raw)\n  delay(500)\n}","files":[],"features":{"smartWifi":false}}
