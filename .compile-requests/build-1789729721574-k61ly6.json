@@ -1,0 +1,1 @@
+{"code":"void setup() {\n  // put your setup code here, to run once:\npinMode(13, OUTPUT);\n}\n\nvoid loop() {\n  // put your main code here, to run repeatedly:\ndigitalWrite(13, HIGH);\ndelay(1000);\ndigitalWrite(13, LOW);\ndelay(1000);\n}","files":[],"features":{"smartWifi":false}}
