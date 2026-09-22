@@ -1,1 +1,0 @@
-{"code":"#define LED 2\n\nvoid setup() {\n  pinMode(LED, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(LED, HIGH);\n  delay(500);\n  digitalWrite(LED, LOW);\n  delay(500);\n}","files":[],"features":{"smartWifi":false}}
