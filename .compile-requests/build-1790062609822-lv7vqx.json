@@ -1,1 +1,0 @@
-{"code":"#include <LiquidCrystal.h>\n\n// Пины: RS, E, DB4, DB5, DB6, DB7\nLiquidCrystal lcd(12, 11, 2, 3, 4, 5);\n\nvoid setup() {\n  // У дисплея 2 строки по 16 символов\n  lcd.begin(16, 2);\n  \n  // Вывод текста\n  lcd.print(\"Hello Bogdan\");\n}\n\nvoid loop() {\n  // Ничего не делаем, текст остаётся на экране\n}\n","files":[],"features":{"smartWifi":false}}
