@@ -1,0 +1,1 @@
+{"code":"\n#include \"Servo.h\"\nServo servo;\n\nvoid setup() {\n  servo.attach(9);\n  pinMode(A1, INPUT);\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  int val = analogRead(A1);\n\n  if (val < 512) { servo.write(0); }\n  if (val > 512) { servo.write(90); }\n}","files":[],"features":{"smartWifi":false}}
