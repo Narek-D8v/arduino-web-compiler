@@ -1,0 +1,1 @@
+{"code":"int load = 0;\n\nvoid setup() {\n  Serial.begin(115200);\n}\n\nvoid loop() {\n  load = random(400, 801);\n\n  Serial.print(\"Load: \");\n  Serial.print(load);\n  Serial.println(\" W\");\n\n  delay(1000);\n}","files":[],"features":{"smartWifi":false}}
