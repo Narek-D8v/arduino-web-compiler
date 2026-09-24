@@ -1,0 +1,1 @@
+{"code":"#include <LiquidCrystal.h>\n\nLiquidCrystal lcd(12, 11, 5, 4, 3, 2);\n\nvoid setup() {\n  lcd.begin(16, 2);\n  lcd.print(\"Privet!\");\n}\n\nvoid loop() {\n}","files":[],"features":{"smartWifi":false}}
