@@ -1,1 +1,0 @@
-{"code":"#include <LiquidCrystal.h>\n\n// RS, E, D4, D5, D6, D7\nLiquidCrystal lcd(12, 11, 5, 4, 3, 2);\n\nvoid setup() {\n  lcd.begin(16, 2);\n\n  lcd.setCursor(0, 0);\n  lcd.print(\"Privet!\");\n\n  lcd.setCursor(0, 1);\n  lcd.print(\"Arduino Uno\");\n}\n\nvoid loop() {\n}","files":[],"features":{"smartWifi":false}}
