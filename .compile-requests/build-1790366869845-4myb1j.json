@@ -1,0 +1,1 @@
+{"code":"const int soundSensor = 7;\nconst int led = LED_BUILTIN;\n\nvoid setup() {\n  pinMode(soundSensor, INPUT);\n  pinMode(led, OUTPUT);\n}\n\nvoid loop() {\n  if (digitalRead(soundSensor) == LOW) {\n    digitalWrite(led, HIGH);\n  } else {\n    digitalWrite(led, LOW);\n  }\n}","files":[],"features":{"smartWifi":false}}
