@@ -1,0 +1,1 @@
+{"code":"// Arduino Sketch\nvoid setup() {\nSerial.begin(9600);\nSeria.print(\"Bir berber bir berbere gel beraber bir berber dükkanı açalım demiş\")\n}\n\nvoid loop() {\n  ","files":[],"features":{"smartWifi":false}}
