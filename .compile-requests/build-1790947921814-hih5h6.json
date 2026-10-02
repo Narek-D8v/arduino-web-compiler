@@ -1,0 +1,1 @@
+{"code":"void setup(){ \n  pinMode(7, INPUT);\n  pinMode(4, OUTPUT);\n\n\n}\nvoid loop(){\n  if(digitalRead(7)==1)[\n    digitalWrite(4,1);\n    delay(1000);\ndigitalWrite(4,0);\n  ]\n}\n","files":[],"features":{"smartWifi":false}}
