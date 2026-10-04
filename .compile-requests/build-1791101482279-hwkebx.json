@@ -1,1 +1,0 @@
-{"code":"const int LED_PIN = 25;\n\nvoid setup() {\n  digitalWrite(LED_PIN, LOW);\n  pinMode(LED_PIN, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(LED_PIN, HIGH);\n  delay(2000);\n  digitalWrite(LED_PIN, LOW);\n  delay(2000);\n}","files":[],"features":{"smartWifi":false}}
