@@ -1,0 +1,1 @@
+{"code":"// Arduino Sketch\nvoid setup() {\n  pinMode(1, INPUT);\n  Serial.begin(9600);\n}\n\nvoid loop() {\n if {\n digitalRead(1, HIGH);\n  Serial.println(\"Hi\");\n  delay(1000);\n  else if \n  Serial.println(\"OFF\");\n }\n}","files":[],"features":{"smartWifi":false}}
