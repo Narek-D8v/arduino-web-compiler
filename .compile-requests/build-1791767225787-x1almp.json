@@ -1,1 +1,0 @@
-{"code":"const int fanPin = 8;\n\nvoid setup() {\n  pinMode(fanPin, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(fanPin, HIGH);  // تشغيل المروحة\n  delay(2000);\n\n  digitalWrite(fanPin, LOW);   // إيقاف المروحة\n  delay(2000);\n}","files":[],"features":{"smartWifi":false}}
