@@ -1,1 +1,0 @@
-{"code":"#include <Arduino.h>\n\nvoid setup() {\n  Serial.begin(115200);\n  delay(1500);\n  Serial.println(\"AQUI ESTOY\");\n}\n\nvoid loop() {\n  Serial.println(\"VIVO\");\n  delay(1000);\n}","files":[],"features":{"smartWifi":false}}
