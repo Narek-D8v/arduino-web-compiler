@@ -1,0 +1,1 @@
+{"code":"const int FAN_PIN = 10;\nconst int HEATER_PIN = 9;\n\nvoid setup() {\n  pinMode(FAN_PIN, OUTPUT);\n  pinMode(HEATER_PIN, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(HEATER_PIN, LOW);\n  digitalWrite(FAN_PIN, HIGH);\n  delay(3000);\n\n  digitalWrite(FAN_PIN, LOW);\n  delay(2000);\n}","files":[],"features":{"smartWifi":false}}
