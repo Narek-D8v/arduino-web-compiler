@@ -1,1 +1,0 @@
-{"code":"#include <LiquidCrystal.h>\n\nLiquidCrystal lcd(12, 11, 5, 4, 3, 2);\n\nvoid setup() {\n  lcd.begin(16, 2);\n  lcd.setCursor(0, 0);\n  lcd.print(\"HELLO YOUSSEF\");\n\n  lcd.setCursor(0, 1);\n  lcd.print(\"LCD IS WORKING\");\n}\n\nvoid loop() {\n}","files":[],"features":{"smartWifi":false}}
