@@ -1,0 +1,1 @@
+{"code":"#define ARDUINO_USB_CDC_ON_BOOT 1\n#define ARDUINO_USB_MODE 1\n#include <Arduino.h>\n\nvoid setup() {\n  Serial.begin(115200);\n}\n\nvoid loop() {\n  if (Serial.available() > 0) {\n    int dato = Serial.read();\n\n    Serial.print(\"Recibido: \");\n    Serial.println(dato);\n  }\n}","files":[],"features":{"smartWifi":false}}
