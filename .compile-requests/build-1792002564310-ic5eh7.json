@@ -1,0 +1,1 @@
+{"code":"// Fade — PWM LED fade example\nint led = 9;\nint brightness = 0;\nint fadeStep = 5;\n\nvoid setup() {\n  pinMode(led, OUTPUT);\n}\n\nvoid loop() {\n  analogWrite(led, brightness);\n  brightness += fadeStep;\n  if (brightness <= 0 || brightness >= 255) fadeStep = -fadeStep;\n  delay(30);\n}","files":[],"features":{"smartWifi":false}}
