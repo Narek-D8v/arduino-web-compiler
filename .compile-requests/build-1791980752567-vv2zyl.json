@@ -1,0 +1,1 @@
+{"code":"import time  \nprint(\"Dastur boshlandi...\")\nwhile True:\n  print(\"LED Yoqildi\")\n  time.sleep(1) \n\n  print(\"LED O'chdi\")\n  time.sleep(1)  ","files":[],"features":{"smartWifi":false}}
