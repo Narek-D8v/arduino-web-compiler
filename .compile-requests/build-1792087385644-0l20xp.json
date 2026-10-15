@@ -1,1 +1,0 @@
-{"code":"#define LED_PIN 8\n\nvoid setup() {\n  pinMode(LED_PIN, OUTPUT);\n  digitalWrite(LED_PIN, HIGH); // Выключить светодиод (active-low)\n}\n\nvoid loop() {\n  digitalWrite(LED_PIN, LOW);   // Включить\n  delay(500);\n  digitalWrite(LED_PIN, HIGH);  // Выключить\n  delay(500);\n}","files":[],"features":{"smartWifi":false}}
