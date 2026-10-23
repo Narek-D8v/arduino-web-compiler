@@ -25,9 +25,23 @@ function githubHeaders() {
     };
 }
 
-function cleanDeviceId(value) {
-    const id = String(value || '').trim();
-    return /^[a-zA-Z0-9-]{8,64}$/.test(id) ? id : '';
+const crypto = require('crypto');
+
+const BOT_PATTERN = /bot|crawler|spider|slurp|curl|wget|python|httpclient|fetch|axios|node|scrapy|headless/i;
+
+function isBot(ua) {
+    return BOT_PATTERN.test(String(ua || ''));
+}
+
+function getVisitorKey(req) {
+    const forwarded = String((req.headers && req.headers['x-forwarded-for']) || '').split(',')[0].trim();
+    const realIp = String((req.headers && req.headers['x-real-ip']) || '').trim();
+    const ip = forwarded || realIp;
+    const ua = String((req.headers && req.headers['user-agent']) || '');
+    if (isBot(ua)) return '';
+    const raw = ip ? `${ip}|${ua}` : String((req.body && req.body.deviceId) || '').trim();
+    if (!raw) return '';
+    return crypto.createHash('sha256').update(raw).digest('hex').slice(0, 32);
 }
 
 async function readStats() {
@@ -120,11 +134,15 @@ module.exports = async (req, res) => {
             });
         }
 
-        const deviceId = cleanDeviceId(req.body && req.body.deviceId);
+        const deviceId = getVisitorKey(req);
         if (!deviceId) {
-            return res.status(400).json({
-                success: false,
-                error: 'valid deviceId is required'
+            const { data } = await readStats();
+            return res.status(200).json({
+                success: true,
+                total: data.total || data.devices.length,
+                unique: data.devices.length,
+                newVisitor: false,
+                bot: true
             });
         }
 
