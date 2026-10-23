@@ -21,7 +21,7 @@
   --panel-width:340px;
 }
 html,body{height:100%;overflow:hidden}
-body{display:grid;grid-template-rows:48px 1fr;background:var(--bg0);color:var(--text);font-family:'Inter',sans-serif;font-size:14px}
+body{display:grid;grid-template-rows:48px 1fr auto;background:var(--bg0);color:var(--text);font-family:'Inter',sans-serif;font-size:14px}
 
 /* ── Toolbar ── */
 #toolbar{display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--bg1);border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;overflow-y:hidden;min-width:0;position:relative}
@@ -49,6 +49,31 @@ select.tb-sel:focus{outline:none;border-color:var(--blue)}
 #diag-badge.warn{background:rgba(255,152,0,.14);color:var(--amber);border:1px solid rgba(255,152,0,.2);display:flex!important}
 #diag-badge.ok{background:rgba(0,230,118,.1);color:var(--green);border:1px solid rgba(0,230,118,.15);display:flex!important}
 #diag-badge:hover{filter:brightness(1.15)}
+#site-footer{display:flex;align-items:center;justify-content:center;gap:8px;padding:6px 12px;background:var(--bg1);border-top:1px solid var(--border);color:var(--muted);font-size:12px;font-family:var(--mono);flex-shrink:0}
+#site-footer strong{color:var(--green);font-weight:700}
+.build-stages{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0;font-size:11px}
+.build-stage{padding:3px 8px;border-radius:999px;border:1px solid var(--border);color:var(--muted);background:var(--bg2)}
+.build-stage.active{border-color:var(--blue);color:var(--blue);background:rgba(33,150,243,.12)}
+.build-stage.done{border-color:var(--green);color:var(--green);background:rgba(0,230,118,.1)}
+.build-stage.fail{border-color:var(--red);color:var(--red);background:rgba(244,67,54,.1)}
+.build-stage-arrow{color:var(--muted)}
+.pin-legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;font-size:10px;color:var(--muted)}
+.pin-legend span{display:inline-flex;align-items:center;gap:4px}
+.pin-legend i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.mem-row{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:12px;font-family:var(--mono)}
+.mem-label{width:44px;color:var(--muted)}
+.mem-bar{flex:1;height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;border:1px solid var(--border)}
+.mem-fill{height:100%;border-radius:3px;transition:width .4s}
+.mem-fill.ok{background:var(--green)}
+.mem-fill.warn{background:var(--amber)}
+.mem-fill.bad{background:var(--red)}
+.mem-value{width:110px;text-align:right;color:var(--text)}
+#site-footer .board-status{display:inline-flex;align-items:center;gap:6px}
+#site-footer .board-chip .board-led{transition:fill .2s}
+#site-footer .board-chip.connected .board-led{fill:var(--green)}
+#site-footer .board-chip.compiling .board-led{fill:var(--amber);animation:board-led-blink 0.8s ease-in-out infinite}
+#site-footer .board-chip.error .board-led{fill:var(--red)}
+@keyframes board-led-blink{0%,100%{opacity:1}50%{opacity:.25}}
 #build-progress-bar{position:absolute;bottom:0;left:0;height:2px;background:var(--green);transition:width .6s cubic-bezier(.16,1,.3,1);width:0;z-index:10;border-radius:0 1px 1px 0}
 #build-progress-bar.fail{background:var(--red)}
 #build-progress-bar.done{width:100%!important}
@@ -161,6 +186,14 @@ select.tb-sel:focus{outline:none;border-color:var(--blue)}
 .fs-chip button,.macro-chip button{border:none;background:transparent;color:var(--muted);cursor:pointer}
 .fs-chip button:hover,.macro-chip button:hover{color:var(--red)}
 .pinout-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.pinout-grid .pin-btn.active{border-color:var(--green);background:rgba(0,230,118,.12);box-shadow:0 0 0 1px rgba(0,230,118,.35)}
+.pinout-grid .pin-btn.hover{border-color:var(--amber);background:rgba(255,152,0,.14);transform:scale(1.03)}
+#pinout-svg svg{width:100%;height:auto}
+#pinout-svg .pin{transition:fill .15s, stroke .15s}
+#pinout-svg .pin.active{fill:var(--green);stroke:var(--green)}
+#pinout-svg .pin.hover{fill:var(--amber);stroke:var(--amber)}
+#pinout-svg .pin{cursor:pointer}
+#pinout-svg .pin:hover{filter:brightness(1.3)}
 .pin-btn{display:flex;justify-content:space-between;gap:6px;padding:7px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:11px;cursor:pointer;text-align:left}
 .pin-btn:hover{border-color:var(--green)}
 .pin-btn b{font-family:var(--mono);color:var(--green)}
@@ -196,6 +229,10 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
 .serial-rx{color:var(--text)}
 .serial-tx{color:var(--blue)}
 .serial-sys{color:var(--muted);font-style:italic}
+.serial-error{color:var(--red)}
+.serial-warn{color:var(--amber)}
+.serial-info{color:var(--blue)}
+.serial-debug{color:#9c27b0}
 #serial-input-row{display:flex;gap:6px;margin-top:8px}
 #serial-input{flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--mono);font-size:12px}
 #serial-input:focus{outline:none;border-color:var(--blue)}
@@ -231,7 +268,9 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
 .search-card:hover{border-color:var(--blue);background:rgba(33,150,243,.05)}
 .search-card .search-card-title{font-size:13px;font-weight:600;margin-bottom:2px}
 .search-card .search-card-sub{font-size:11px;color:var(--muted)}
-.search-card .search-card-desc{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.3}
+.search-card .search-card-repo{font-size:10px;margin-top:4px;word-break:break-all}
+.search-card-repo a{color:var(--blue)}
+.search-card-desc{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.3}
 .search-empty{color:var(--muted);font-size:13px;padding:16px;text-align:center}
 .installed-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
 .installed-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.25);border-radius:20px;font-size:12px;font-weight:600;color:var(--green)}
@@ -322,8 +361,9 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 
 @media (max-width:900px){
-  body{grid-template-rows:48px 1fr}
+  body{grid-template-rows:48px 1fr auto}
   #main{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) minmax(260px,40vh)}
+  #site-footer{font-size:11px}
   #panel{border-left:none;border-top:1px solid var(--border)}
   #serial-wrap{flex:0 0 300px}
 }
@@ -390,6 +430,10 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
     <option value="ard">Dark</option>
     <option value="vs">Light</option>
     <option value="hc-black">High Contrast</option>
+    <option value="dracula">Dracula</option>
+    <option value="one-dark">One Dark</option>
+    <option value="gruvbox">Gruvbox</option>
+    <option value="tokyo-night">Tokyo Night</option>
   </select>
   <label class="tb-toggle"><input type="checkbox" id="minimap-toggle" onchange="setMinimap(this.checked)"> Minimap</label>
   <div id="tb-status" class="hidden"></div>
@@ -539,6 +583,7 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
     <div class="pane" id="pinout-pane" style="display:none">
       <div class="pane-title">Pinout</div>
       <div style="margin-bottom:10px"><input id="pinout-search" class="secret-input" placeholder="Filter pins…" oninput="renderPinout(this.value)" style="font-size:12px"></div>
+      <div id="pinout-svg" style="margin-bottom:10px"></div>
       <div class="pinout-grid" id="pinout-grid"></div>
     </div>
 
@@ -549,7 +594,17 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
         <a id="build-link" href="#" target="_blank" rel="noopener" style="display:none">Open Actions</a>
       </div>
       <div id="build-state">Idle</div>
+      <div id="build-stages" class="build-stages">
+        <span class="build-stage" data-stage="0">Sanitizing</span>
+        <span class="build-stage-arrow">➔</span>
+        <span class="build-stage" data-stage="1">Dispatching</span>
+        <span class="build-stage-arrow">➔</span>
+        <span class="build-stage" data-stage="2">Compiling</span>
+        <span class="build-stage-arrow">➔</span>
+        <span class="build-stage" data-stage="3">Ready to Flash</span>
+      </div>
       <div id="build-steps" style="margin-top:10px"></div>
+      <div id="build-memory" style="margin-top:10px;display:none"></div>
       <button class="mini-btn danger" id="cancel-build-btn" onclick="cancelBuild()" style="display:none;margin-top:8px">Cancel Build</button>
     </div>
 
@@ -565,6 +620,11 @@ esp-web-install-button [slot=activate]:hover{transform:translateY(-1px);box-shad
         <span>Serial Plotter</span>
         <label class="tb-toggle" style="font-size:10px;height:auto;padding:2px 6px"><input type="checkbox" id="plotter-toggle" onchange="togglePlotter(this.checked)"> Plot</label>
         <button class="mini-btn" onclick="clearPlotter()" style="padding:2px 8px;font-size:10px">Clear</button>
+        <select id="plotter-theme" onchange="setPlotterTheme(this.value)" style="font-size:10px;padding:2px 4px;border-radius:4px;background:var(--bg2);border:1px solid var(--border);color:var(--text)">
+          <option value="neon">Neon</option>
+          <option value="oled">OLED Green</option>
+          <option value="matrix">Dark Matrix</option>
+        </select>
       </div>
       <canvas id="serial-plotter"></canvas>
       <div class="plotter-controls">
@@ -1605,7 +1665,8 @@ require(['vs/editor/editor.main'], ()=>{
     language:'cpp',
     theme:'vs-dark',
     fontSize:14,
-    fontFamily:"'JetBrains Mono', monospace",
+    fontFamily:"'JetBrains Mono', 'Fira Code', monospace",
+    fontLigatures:true,
     automaticLayout:true,
     minimap:{enabled:localStorage.getItem('editorMinimap') === '1'},
     scrollBeyondLastLine:false,
@@ -1681,6 +1742,10 @@ require(['vs/editor/editor.main'], ()=>{
       'editor.selectionBackground':'#00e67630',
     }
   });
+  monaco.editor.defineTheme('dracula', { base:'vs-dark', inherit:true, rules:[{token:'keyword',foreground:'ff79c6',fontStyle:'bold'},{token:'comment',foreground:'6272a4',fontStyle:'italic'},{token:'string',foreground:'f1fa8c'},{token:'number',foreground:'bd93f9'}], colors:{'editor.background':'#282a36','editorCursor.foreground':'#f8f8f2','editor.selectionBackground':'#44475a'} });
+  monaco.editor.defineTheme('one-dark', { base:'vs-dark', inherit:true, rules:[{token:'keyword',foreground:'c678dd',fontStyle:'bold'},{token:'comment',foreground:'5c6370',fontStyle:'italic'},{token:'string',foreground:'98c379'},{token:'number',foreground:'d19a66'}], colors:{'editor.background':'#282c34','editorCursor.foreground':'#528bff','editor.selectionBackground':'#3e4451'} });
+  monaco.editor.defineTheme('gruvbox', { base:'vs-dark', inherit:true, rules:[{token:'keyword',foreground:'fb4934',fontStyle:'bold'},{token:'comment',foreground:'928374',fontStyle:'italic'},{token:'string',foreground:'b8bb26'},{token:'number',foreground:'d3869b'}], colors:{'editor.background':'#282828','editorCursor.foreground':'#ebdbb2','editor.selectionBackground':'#504945'} });
+  monaco.editor.defineTheme('tokyo-night', { base:'vs-dark', inherit:true, rules:[{token:'keyword',foreground:'bb9af7',fontStyle:'bold'},{token:'comment',foreground:'565f89',fontStyle:'italic'},{token:'string',foreground:'9ece6a'},{token:'number',foreground:'ff9e64'}], colors:{'editor.background':'#1a1b26','editorCursor.foreground':'#c0caf5','editor.selectionBackground':'#33467c'} });
   setEditorTheme(localStorage.getItem('editorTheme') || 'ard');
   setMinimap(localStorage.getItem('editorMinimap') === '1');
 
@@ -1689,6 +1754,23 @@ require(['vs/editor/editor.main'], ()=>{
     syncActiveFile();
     saveProjectFiles();
     scheduleDiagnostics();
+    highlightPinout();
+  });
+
+  editor.onMouseMove(e=>{
+    const pos = e.target && e.target.position;
+    if (!pos) { clearHoverPin(); return; }
+    const model = editor.getModel();
+    const word = model.getWordAtPosition(pos);
+    if (word && /^\d+$/.test(word.word)) {
+      const line = model.getLineContent(pos.lineNumber);
+      const before = line.slice(0, word.startColumn - 1);
+      if (/(?:digitalWrite|digitalRead|pinMode|analogRead|analogWrite|tone)\s*\(\s*$/.test(before)) {
+        setHoverPin(word.word);
+        return;
+      }
+    }
+    clearHoverPin();
   });
   runLightDiagnostics();
   restoreSharedProject();
@@ -2255,7 +2337,8 @@ function applyProject(files, nextActive='sketch.ino'){
 }
 
 function setEditorTheme(theme){
-  const value = ['ard','vs','hc-black'].includes(theme) ? theme : 'ard';
+  const allowed = ['ard','vs','hc-black','dracula','one-dark','gruvbox','tokyo-night'];
+  const value = allowed.includes(theme) ? theme : 'ard';
   localStorage.setItem('editorTheme', value);
   const select = document.getElementById('theme-sel');
   if (select) select.value = value;
@@ -3624,6 +3707,77 @@ const PINOUTS = {
   ]
 };
 
+function pinFunctionColor(text){
+  const t = String(text || '').toLowerCase();
+  if (/gnd|ground/.test(t)) return '#64748b';
+  if (/3\.3v|5v|vin|power|vcc|3v3/.test(t)) return '#f44336';
+  if (/sda|scl|i2c/.test(t)) return '#9c27b0';
+  if (/spi|mosi|miso|sck/.test(t)) return '#ff9800';
+  if (/rx|tx|uart/.test(t)) return '#2196f3';
+  if (/pwm/.test(t)) return '#00bcd4';
+  if (/adc|analog/.test(t)) return '#00e676';
+  if (/boot|strapping/.test(t)) return '#ff5722';
+  return '#2196f3';
+}
+
+function renderPinoutDiagram(filter){
+  const svgEl = document.getElementById('pinout-svg');
+  if (!svgEl) return;
+  const { board } = boardInfo();
+  const pins = PINOUTS[board] || PINOUTS.esp32;
+  const q = (filter || document.getElementById('pinout-search')?.value || '').toLowerCase();
+  const left = pins.slice(0, Math.ceil(pins.length / 2));
+  const right = pins.slice(Math.ceil(pins.length / 2));
+  const rows = Math.max(left.length, right.length);
+  const w = 300;
+  const h = rows * 18 + 50;
+  let html = `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">`;
+  html += `<rect x="40" y="24" width="${w-80}" height="${h-40}" rx="8" fill="#1e2535" stroke="#252d3d" stroke-width="2"/>`;
+  html += `<text x="${w/2}" y="16" text-anchor="middle" fill="#64748b" font-size="11" font-family="monospace">${board.toUpperCase()}</text>`;
+
+  const renderSide = (list, xPin, xText, anchorText) => {
+    list.forEach((pp, i) => {
+      const y = 34 + i * 18;
+      const label = pp[0];
+      const note = pp[1] || '';
+      const match = !q || label.toLowerCase().includes(q) || note.toLowerCase().includes(q);
+      if (!match) return;
+      html += `<g>`;
+      html += `<line x1="${xPin > w/2 ? w-40 : 40}" y1="${y}" x2="${xPin}" y2="${y}" stroke="#252d3d" stroke-width="1.5"/>`;
+      const pinColor = pinFunctionColor(note + " " + label);
+      html += `<circle class="pin" data-label="${escapeHtml(label)}" cx="${xPin}" cy="${y}" r="6" fill="#0d1117" stroke="${pinColor}" stroke-width="2"/>`;
+      html += `<title>${escapeHtml(label)}: ${escapeHtml(note)}</title>`;
+      if (anchorText === 'end') html += `<text x="${xText}" y="${y+4}" text-anchor="end" fill="#e2e8f0" font-size="10" font-family="monospace">${escapeHtml(label)}</text>`;
+      else html += `<text x="${xText}" y="${y+4}" fill="#e2e8f0" font-size="10" font-family="monospace">${escapeHtml(label)}</text>`;
+      html += `</g>`;
+    });
+  };
+  renderSide(left, 14, 26, 'start');
+  renderSide(right, w-14, w-26, 'end');
+
+  html += `</svg>`;
+  html += '<div class="pin-legend">' +
+    '<span><i style="background:#f44336"></i>Power</span>' +
+    '<span><i style="background:#64748b"></i>GND</span>' +
+    '<span><i style="background:#00e676"></i>ADC</span>' +
+    '<span><i style="background:#00bcd4"></i>PWM</span>' +
+    '<span><i style="background:#9c27b0"></i>I2C</span>' +
+    '<span><i style="background:#ff9800"></i>SPI</span>' +
+    '<span><i style="background:#2196f3"></i>GPIO/UART</span>' +
+  '</div>';
+  svgEl.innerHTML = html;
+  highlightPinoutSvg();
+}
+
+function highlightPinoutSvg(){
+  if (typeof pinsUsedInCode !== 'function') return;
+  const used = pinsUsedInCode();
+  document.querySelectorAll('#pinout-svg .pin').forEach(circle => {
+    const label = (circle.getAttribute('data-label') || '').trim();
+    circle.classList.toggle('active', used.has(label));
+  });
+}
+
 function renderPinout(filter){
   const { board } = boardInfo();
   const grid = document.getElementById('pinout-grid');
@@ -3645,6 +3799,68 @@ function renderPinout(filter){
     grid.appendChild(btn);
   });
   if (!grid.children.length) grid.innerHTML = '<span style="color:var(--muted);font-size:12px;grid-column:1/-1;text-align:center;padding:16px">No pins match filter</span>';
+  renderPinoutDiagram(filter);
+  highlightPinout();
+}
+
+function pinLabelForNumber(board, value){
+  const v = String(value).trim();
+  if (/^a\d+$/i.test(v)) return 'A' + v.slice(1).toUpperCase();
+  if (/^gpio\s*\d+$/i.test(v)) return 'GPIO ' + v.replace(/[^0-9]/g, '');
+  const n = v.replace(/[^0-9]/g, '');
+  if (!n) return v.toUpperCase();
+  return board.startsWith('esp32') ? ('GPIO ' + n) : ('D' + n);
+}
+
+function pinsUsedInCode(){
+  const used = new Set();
+  if (!editor) return used;
+  const { board } = boardInfo();
+  const code = editor.getValue();
+  const re = /\b(?:digitalWrite|digitalRead|pinMode|analogRead|analogWrite|tone)\s*\(\s*(\d+|A\d+)/gi;
+  let m;
+  while ((m = re.exec(code)) !== null) {
+    used.add(pinLabelForNumber(board, m[1]));
+  }
+  return used;
+}
+
+function highlightPinout(){
+  const used = pinsUsedInCode();
+  document.querySelectorAll('#pinout-grid .pin-btn').forEach(btn => {
+    const label = (btn.querySelector('b')?.textContent || '').trim();
+    btn.classList.toggle('active', used.has(label));
+  });
+  highlightPinoutSvg();
+}
+
+function setHoverPin(value){
+  const { board } = boardInfo();
+  const label = pinLabelForNumber(board, value);
+  document.querySelectorAll('#pinout-grid .pin-btn').forEach(btn => {
+    const l = (btn.querySelector('b')?.textContent || '').trim();
+    btn.classList.toggle('hover', l === label);
+  });
+  document.querySelectorAll('#pinout-svg .pin').forEach(circle => {
+    const l = (circle.getAttribute('data-label') || '').trim();
+    circle.classList.toggle('hover', l === label);
+  });
+}
+
+function setHoverPinLabel(label){
+  document.querySelectorAll('#pinout-grid .pin-btn').forEach(btn => {
+    const l = (btn.querySelector('b')?.textContent || '').trim();
+    btn.classList.toggle('hover', l === label);
+  });
+  document.querySelectorAll('#pinout-svg .pin').forEach(circle => {
+    const l = (circle.getAttribute('data-label') || '').trim();
+    circle.classList.toggle('hover', l === label);
+  });
+}
+
+function clearHoverPin(){
+  document.querySelectorAll('#pinout-grid .pin-btn').forEach(btn => btn.classList.remove('hover'));
+  document.querySelectorAll('#pinout-svg .pin').forEach(circle => circle.classList.remove('hover'));
 }
 
 function togglePinout(){
@@ -3915,12 +4131,66 @@ function updateBuildProgressBar(fraction, status){
   else bar.style.background = 'var(--green)';
 }
 
+let lastMemoryRunId = null;
+function renderBuildMemory(memory){
+  const el = document.getElementById('build-memory');
+  if (!el) return;
+  if (!memory) { el.style.display='none'; el.innerHTML=''; return; }
+  const rows = [];
+  if (memory.flash) {
+    const f = memory.flash;
+    const cls = f.percent > 90 ? 'bad' : (f.percent > 70 ? 'warn' : 'ok');
+    rows.push(`<div class="mem-row"><span class="mem-label">Flash</span><div class="mem-bar"><div class="mem-fill ${cls}" style="width:${f.percent}%"></div></div><span class="mem-value">${f.percent}% (${(f.used/1024).toFixed(1)} KB / ${(f.max/1024).toFixed(1)} KB)</span></div>`);
+  }
+  if (memory.ram) {
+    const r = memory.ram;
+    const cls = r.percent > 90 ? 'bad' : (r.percent > 70 ? 'warn' : 'ok');
+    rows.push(`<div class="mem-row"><span class="mem-label">RAM</span><div class="mem-bar"><div class="mem-fill ${cls}" style="width:${r.percent}%"></div></div><span class="mem-value">${r.percent}% (${(r.used/1024).toFixed(1)} KB / ${(r.max/1024).toFixed(1)} KB)</span></div>`);
+  }
+  el.innerHTML = rows.join('');
+  el.style.display = rows.length ? '' : 'none';
+}
+
+async function fetchBuildMemory(runId){
+  if (!runId || lastMemoryRunId === runId) return;
+  lastMemoryRunId = runId;
+  try {
+    const res = await fetch(`/api/logs?run_id=${encodeURIComponent(runId)}`, { cache:'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && data.memory) renderBuildMemory(data.memory);
+  } catch(e) {}
+}
+
+function updateBuildStages(data){
+  const stages = document.querySelectorAll('#build-stages .build-stage');
+  if (!stages.length) return;
+  stages.forEach(s => s.classList.remove('active','done','fail'));
+  let active = 0;
+  if (!data || !data.found) active = 0;
+  else if (data.status === 'completed') {
+    const failed = (data.jobs || []).flatMap(j=>j.steps||[]).some(s=>s.conclusion==='failure'||s.conclusion==='cancelled'||s.conclusion==='timed_out');
+    active = failed ? 2 : 3;
+    stages.forEach((s,i)=>{ if (i < active) s.classList.add('done'); if (i === active && failed) s.classList.add('fail'); if (i === active && !failed) s.classList.add('done'); });
+    return;
+  } else if (data.status === 'in_progress' || data.status === 'queued') {
+    active = 2;
+  } else {
+    active = 1;
+  }
+  stages.forEach((s,i)=>{
+    if (i < active) s.classList.add('done');
+    if (i === active) s.classList.add('active');
+  });
+}
+
 function renderBuildProgress(data){
   const box = document.getElementById('build-progress');
   const state = document.getElementById('build-state');
   const steps = document.getElementById('build-steps');
   const link = document.getElementById('build-link');
   box.classList.add('open');
+  updateBuildStages(data);
 
   if (!data.found){
     state.textContent = data.message || 'Waiting for GitHub Actions...';
@@ -3955,6 +4225,7 @@ function renderBuildProgress(data){
 
   if (data.status === 'completed'){
     updateBuildProgressBar(1, failed ? 'fail' : 'done');
+    if (data.run_id) fetchBuildMemory(data.run_id);
   } else if (totalSteps > 0){
     updateBuildProgressBar(doneSteps / totalSteps * 0.9, 'run');
   } else {
@@ -4121,6 +4392,8 @@ async function compile(){
   btn.disabled = true;
   btn.textContent = '…';
   setStatus('Compiling…', 'run');
+  setBoardStatus('compiling', 'Compiling...');
+  setBoardStatus('compiling', 'Compiling...');
   updateBuildProgressBar(0, 'run');
 
   try {
@@ -4147,6 +4420,7 @@ async function compile(){
 
     setStatus('✓ Build triggered', 'ok');
     serialLog('Build triggered — waiting for GitHub Actions…','sys');
+    setBoardStatus('connected', 'Ready to flash');
     if (data.request_id) pollBuildStatus(data.request_id);
 
     // After a delay, refresh flash button URLs
@@ -4154,6 +4428,7 @@ async function compile(){
 
   } catch(e){
     setStatus('✗ ' + e.message, 'err');
+    setBoardStatus('error', 'Error');
     serialLog('Compile error: ' + e.message, 'sys');
   } finally {
     btn.disabled = false;
@@ -4257,6 +4532,27 @@ async function downloadEspBins(){
 window.addEventListener('load', ()=>{
   refreshFlashUrls();
   onBoardChange();
+  setPlotterTheme(plotterTheme);
+
+  const pinoutSvgContainer = document.getElementById('pinout-svg');
+  if (pinoutSvgContainer) {
+    pinoutSvgContainer.addEventListener('mouseover', e => {
+      const pin = e.target && e.target.closest ? e.target.closest('.pin') : null;
+      if (pin) setHoverPinLabel(pin.getAttribute('data-label') || '');
+    });
+    pinoutSvgContainer.addEventListener('mouseout', e => {
+      const to = e.relatedTarget;
+      if (!to || !to.closest || !to.closest('.pin')) clearHoverPin();
+    });
+    pinoutSvgContainer.addEventListener('click', async e => {
+      const pin = e.target && e.target.closest ? e.target.closest('.pin') : null;
+      if (!pin) return;
+      const label = pin.getAttribute('data-label') || '';
+      const value = label.replace(/^GPIO\s+/, '');
+      try { await navigator.clipboard?.writeText(value); } catch(_) {}
+      if (typeof setStatus === 'function') setStatus(`Copied ${value}`, 'ok');
+    });
+  }
 
   // Show a warning if Web Serial is not available
   const serialUnsupported = !navigator.serial;
@@ -4274,10 +4570,27 @@ window.addEventListener('load', ()=>{
 // ────────────────────────────────────────────────────────────────────────────
 let serialPort = null, serialReader = null, serialWriter = null, serialReading = false;
 
+function setBoardStatus(state, text){
+  const chip = document.querySelector('#site-footer .board-chip');
+  const label = document.getElementById('board-status-text');
+  if (chip) {
+    chip.classList.remove('connected','compiling','error');
+    if (state) chip.classList.add(state);
+  }
+  if (label && text) label.textContent = text;
+}
+
 function serialLog(text, cls='rx'){
   const out = document.getElementById('serial-out');
+  let resolvedCls = cls;
+  if (cls === 'rx' || cls === 'sys') {
+    if (/\[ERROR\]/i.test(text)) resolvedCls = 'error';
+    else if (/\[WARN(?:ING)?\]/i.test(text)) resolvedCls = 'warn';
+    else if (/\[INFO\]/i.test(text)) resolvedCls = 'info';
+    else if (/\[DEBUG\]/i.test(text)) resolvedCls = 'debug';
+  }
   const div = document.createElement('div');
-  div.className = 'serial-' + cls;
+  div.className = 'serial-' + resolvedCls;
   const showTime = document.getElementById('serial-timestamps')?.checked;
   div.textContent = showTime ? `[${new Date().toLocaleTimeString()}] ${text}` : text;
   out.appendChild(div);
@@ -4300,6 +4613,7 @@ async function serialConnect(){
     document.getElementById('sc-connect').classList.remove('active');
     document.getElementById('sc-disconnect').classList.add('active');
     const dot = document.getElementById('serial-status-dot');
+    setBoardStatus('connected', 'Serial connected');
     if (dot) { dot.style.background = 'var(--green)'; dot.title = 'Connected'; }
     serialReading = true;
     readSerial();
@@ -4338,6 +4652,7 @@ async function serialDisconnect(){
   document.getElementById('sc-connect').classList.remove('active');
   document.getElementById('sc-disconnect').classList.remove('active');
   const dot = document.getElementById('serial-status-dot');
+  setBoardStatus('error', 'Disconnected');
   if (dot) { dot.style.background = 'var(--muted)'; dot.title = 'Disconnected'; }
 }
 
@@ -4435,7 +4750,14 @@ function serialClear(){ document.getElementById('serial-out').innerHTML=''; }
 // ── Serial Plotter ────────────────────────────────────────────────
 let plotterEnabled = false;
 let plotterSeries = [];
+let plotterTheme = localStorage.getItem('plotterTheme') || 'neon';
 const PLOTTER_MAX = 200;
+const PLOTTER_THEMES = {
+  neon: { bg:'#0d1117', grid:'rgba(255,255,255,0.05)', colors:['#00e676','#2196f3','#ff9800','#f44336','#e040fb','#00bcd4'] },
+  oled: { bg:'#000000', grid:'rgba(0,230,118,0.08)', colors:['#00ff88','#00cc66','#009944','#00ffcc','#66ffaa','#33ff99'] },
+  matrix: { bg:'#0a0f0a', grid:'rgba(0,255,0,0.06)', colors:['#00ff41','#00cc33','#009922','#33ff66','#66ff88','#99ffaa'] }
+};
+function setPlotterTheme(theme){ plotterTheme = (PLOTTER_THEMES[theme] ? theme : 'neon'); localStorage.setItem('plotterTheme', plotterTheme); const sel = document.getElementById('plotter-theme'); if (sel) sel.value = plotterTheme; drawPlotter(); }
 
 function togglePlotter(on){
   plotterEnabled = on;
@@ -4469,7 +4791,8 @@ function drawPlotter(){
   const w = rect.width, h = rect.height;
 
   ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = '#0d1117';
+  const theme = PLOTTER_THEMES[plotterTheme] || PLOTTER_THEMES.neon;
+  ctx.fillStyle = theme.bg;
   ctx.fillRect(0, 0, w, h);
 
   if (!plotterSeries.length) return;
@@ -4488,7 +4811,7 @@ function drawPlotter(){
   min -= padding;
   max += padding;
 
-  const colors = ['#00e676','#2196f3','#ff9800','#f44336','#e040fb','#00bcd4'];
+  const colors = theme.colors;
   const xStep = w / PLOTTER_MAX;
 
   for (let s = 0; s < seriesCount; s++){
@@ -4507,7 +4830,7 @@ function drawPlotter(){
   }
 
   // Grid lines
-  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.strokeStyle = theme.grid;
   ctx.lineWidth = 0.5;
   for (let i = 1; i < 5; i++){
     const y = (h / 5) * i;
@@ -4737,27 +5060,48 @@ async function loadLibIndex(){
         await new Promise(r => setTimeout(r, 3000));
       }
       try {
-        const res = await fetch('/api/lib-index', { cache: 'no-store' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-        setStatus('⏳ Decompressing…');
-        const ds = new DecompressionStream('gzip');
-        const decompressed = res.body.pipeThrough(ds);
-        const text = await new Response(decompressed).text();
+        let text;
+        try {
+          const res = await fetch('/api/lib-index', { cache: 'no-store' });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          setStatus('Loading index...');
+          text = await res.text();
+        } catch (apiErr) {
+          setStatus('Loading index directly...');
+          const direct = await fetch('https://downloads.arduino.cc/libraries/library_index.json.gz', { cache: 'no-store' });
+          if (!direct.ok) throw apiErr;
+          const ds = new DecompressionStream('gzip');
+          const decompressed = direct.body.pipeThrough(ds);
+          text = await new Response(decompressed).text();
+        }
 
         setStatus('⏳ Parsing…');
         const json = JSON.parse(text);
-        const index = [];
+        const byName = new Map();
         for (const lib of json.libraries || []) {
-          const latest = lib.versions?.[lib.versions.length - 1];
-          if (!latest) continue;
-          const header = (latest.includes?.[0]) ||
+          const header = (Array.isArray(lib.providesIncludes) && lib.providesIncludes[0]) ||
                          (lib.name.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'') + '.h');
-          index.push({
+          const item = {
             name: lib.name, header, tag: lib.category || 'Other',
-            sentence: (lib.sentence || '').slice(0, 120), version: latest.version || '',
-          });
+            sentence: (lib.sentence || '').slice(0, 120), version: lib.version || '',
+            author: lib.author || lib.maintainer || '',
+            repository: lib.repository || lib.website || '',
+          };
+
+          const prev = byName.get(lib.name);
+          if (!prev) { byName.set(lib.name, item); continue; }
+
+          const va = String(item.version || '').split('.').map(x => parseInt(x, 10) || 0);
+          const vb = String(prev.version || '').split('.').map(x => parseInt(x, 10) || 0);
+          let better = false;
+          for (let i = 0; i < Math.max(va.length, vb.length); i++) {
+            const x = va[i] || 0;
+            const y = vb[i] || 0;
+            if (x !== y) { better = x > y; break; }
+          }
+          if (better) byName.set(lib.name, item);
         }
+        const index = Array.from(byName.values());
 
         try { localStorage.setItem('_libIndexCache', JSON.stringify({ ts: Date.now(), data: index })); } catch(_){}
 
@@ -4796,12 +5140,40 @@ function searchLibs(q) {
   const query = q.trim();
 
   if (!query) {
-    grid.innerHTML = '';
+    const popular = (window.LIBS || []).slice(0, 24);
+    grid.innerHTML = popular.map(lib => `
+      <div class="search-card" data-lib="${escapeHtml(lib.name)}">
+        <div class="search-card-title">${escapeHtml(lib.name)}</div>
+        <div class="search-card-sub">${escapeHtml(lib.header || '')}${lib.author ? '  \u2022  ' + escapeHtml(lib.author) : ''}</div>
+        <div class="search-card-desc">${escapeHtml(lib.tag || '')}</div>
+      </div>
+    `).join('');
+    grid.querySelectorAll('.search-card').forEach(card => {
+      card.addEventListener('click', () => { installLibrary(card.dataset.lib); });
+    });
     return;
   }
 
   if (!_libFuse) {
-    grid.innerHTML = '<div class="search-empty">Индекс поиска не загружен</div>';
+    const qLower = query.toLowerCase();
+    const filtered = (window.LIBS || []).filter(lib =>
+      (lib.name || '').toLowerCase().includes(qLower) ||
+      (lib.header || '').toLowerCase().includes(qLower)
+    ).slice(0, 50);
+    if (!filtered.length) {
+      grid.innerHTML = '<div class="search-empty">No libraries found</div>';
+      return;
+    }
+    grid.innerHTML = filtered.map(lib => `
+      <div class="search-card" data-lib="${escapeHtml(lib.name)}">
+        <div class="search-card-title">${escapeHtml(lib.name)}</div>
+        <div class="search-card-sub">${escapeHtml(lib.header || '')}${lib.author ? '  \u2022  ' + escapeHtml(lib.author) : ''}</div>
+        <div class="search-card-desc">${escapeHtml(lib.tag || '')}</div>
+      </div>
+    `).join('');
+    grid.querySelectorAll('.search-card').forEach(card => {
+      card.addEventListener('click', () => { installLibrary(card.dataset.lib); });
+    });
     return;
   }
 
@@ -4819,11 +5191,12 @@ function searchLibs(q) {
     <div class="search-card" data-lib="${escapeHtml(lib.name)}">
       <div class="search-card-title">${escapeHtml(lib.name)}</div>
       <div class="search-card-sub">
-        ${escapeHtml(lib.header || '')}
+        ${escapeHtml(lib.header || '')}${lib.author ? '  \u2022  ' + escapeHtml(lib.author) : ''}
       </div>
       <div class="search-card-desc">
         ${escapeHtml(lib.sentence || '')}
       </div>
+      ${lib.repository ? `<div class="search-card-repo"><a href="${escapeHtml(lib.repository)}" target="_blank" rel="noopener">${escapeHtml(lib.repository)}</a></div>` : ''}
     </div>
   `).join('');
 
@@ -4924,6 +5297,42 @@ window.addEventListener('load',()=>{
     if (editor && !editor.getValue().includes(line)) injectInclude(lib.header);
   });
 });
+
+// Unique visitor counter
+function getVisitorDeviceId() {
+  try {
+    let id = localStorage.getItem('awc_device_id');
+    if (!id) {
+      id = (crypto && crypto.randomUUID) ? crypto.randomUUID() : ('dev-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+      localStorage.setItem('awc_device_id', id);
+    }
+    return id;
+  } catch (e) {
+    return 'dev-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+  }
+}
+
+async function updateVisitorCount() {
+  const el = document.getElementById('visitor-count');
+  if (!el) return;
+  try {
+    const response = await fetch('/api/visits', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: getVisitorDeviceId() })
+    });
+    const data = await response.json();
+    if (data && typeof data.total === 'number') {
+      el.textContent = data.total.toLocaleString('ru-RU');
+    } else {
+      el.textContent = '—';
+    }
+  } catch (e) {
+    el.textContent = '—';
+  }
+}
+
+window.addEventListener('load', updateVisitorCount);
 </script>
 
 <!-- Keyboard Shortcuts -->
@@ -5005,6 +5414,18 @@ window.addEventListener('load',()=>{
   <div class="ctx-sep"></div>
   <div class="ctx-item danger" id="ctx-delete" onclick="contextMenuDelete()">✕ Delete</div>
 </div>
+
+<footer id="site-footer">
+  <span class="board-status" title="Board status">
+    <svg class="board-chip" viewBox="0 0 40 24" width="40" height="24" aria-hidden="true">
+      <rect x="2" y="4" width="36" height="16" rx="2" fill="#1e2535" stroke="#252d3d" stroke-width="1.5"/>
+      <rect x="12" y="7" width="16" height="10" rx="1" fill="#0d1117" stroke="#2196f3" stroke-width="1"/>
+      <circle class="board-led" cx="32" cy="12" r="3" fill="#64748b"/>
+    </svg>
+    <span id="board-status-text">Disconnected</span>
+  </span>
+  <span>Посетителей за всё время: <strong id="visitor-count">…</strong></span>
+</footer>
 
 </body>
 </html>

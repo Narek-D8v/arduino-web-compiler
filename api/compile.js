@@ -8,7 +8,6 @@ const MAX_FILE_BYTES = 1000000;
 const MAX_FILES = 40;
 
 function setCors(res) {
-    res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
     res.setHeader(
@@ -51,7 +50,8 @@ function normalizeSmartWifi(raw, enabled) {
     if (!enabled || !raw || typeof raw !== 'object') return undefined;
 
     let apPass = cleanText(raw.apPass, 64, '');
-    if (apPass && apPass.length < 8) apPass = '';
+    const apPassTooShort = Boolean(apPass && apPass.length < 8);
+    if (apPassTooShort) apPass = '';
 
     const timeout = Number(raw.timeoutSeconds);
     const apSsid = cleanText(raw.apSsid, 48, 'ESP32-Setup').trim() || 'ESP32-Setup';
@@ -62,7 +62,8 @@ function normalizeSmartWifi(raw, enabled) {
         apPass,
         portalTitle,
         accent: cleanColor(raw.accent),
-        timeoutSeconds: Number.isFinite(timeout) ? Math.min(60, Math.max(3, Math.round(timeout))) : 12
+        timeoutSeconds: Number.isFinite(timeout) ? Math.min(60, Math.max(3, Math.round(timeout))) : 12,
+        apPassTooShort
     };
 }
 
@@ -197,13 +198,19 @@ module.exports = async (req, res) => {
             }
         );
 
+        const warnings = [];
+        if (cleanSmartWifi && cleanSmartWifi.apPassTooShort) {
+            warnings.push('Smart Wi-Fi AP password must be at least 8 characters; an open access point will be used.');
+        }
+
         if (dispatchResponse.status === 204) {
             return res.status(200).json({
                 success: true,
                 message: 'Compilation triggered successfully',
                 repository: `${REPO_OWNER}/${REPO_NAME}`,
                 request_id: requestId,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                warnings
             });
         }
 

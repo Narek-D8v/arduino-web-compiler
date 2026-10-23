@@ -4,7 +4,6 @@ const REPO_OWNER = process.env.GITHUB_OWNER || 'Narek-D8v';
 const REPO_NAME = process.env.GITHUB_REPO || 'arduino-web-compiler';
 
 function setCors(res) {
-    res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
     res.setHeader(
@@ -86,11 +85,34 @@ module.exports = async (req, res) => {
             ? lines.slice(-50).join('\n')
             : '';
 
+        // Parse Arduino CLI memory usage from logs
+        let memory = null;
+        const flashMatch = text.match(/Sketch uses (\d+) bytes \((\d+)%\) of program storage space\. Maximum is (\d+) bytes\./i);
+        const ramMatch = text.match(/Global variables use (\d+) bytes \((\d+)%\) of dynamic memory, leaving (\d+) bytes for local variables\. Maximum is (\d+) bytes\./i);
+        if (flashMatch || ramMatch) {
+            memory = {};
+            if (flashMatch) {
+                memory.flash = {
+                    used: parseInt(flashMatch[1], 10),
+                    percent: parseInt(flashMatch[2], 10),
+                    max: parseInt(flashMatch[3], 10)
+                };
+            }
+            if (ramMatch) {
+                memory.ram = {
+                    used: parseInt(ramMatch[1], 10),
+                    percent: parseInt(ramMatch[2], 10),
+                    max: parseInt(ramMatch[4], 10)
+                };
+            }
+        }
+
         return res.status(200).json({
             success: true,
             entries,
             tail,
-            totalLines: lines.length
+            totalLines: lines.length,
+            memory
         });
 
     } catch (error) {

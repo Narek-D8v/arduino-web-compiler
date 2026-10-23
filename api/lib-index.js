@@ -43,7 +43,12 @@ module.exports = async (req, res) => {
 
     res.setHeader(
       'Content-Type',
-      'application/gzip'
+      'application/json; charset=utf-8'
+    );
+
+    res.setHeader(
+      'Content-Encoding',
+      'gzip'
     );
 
     res.setHeader(

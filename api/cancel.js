@@ -4,7 +4,6 @@ const REPO_OWNER = process.env.GITHUB_OWNER || 'Narek-D8v';
 const REPO_NAME = process.env.GITHUB_REPO || 'arduino-web-compiler';
 
 function setCors(res) {
-    res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
     res.setHeader(

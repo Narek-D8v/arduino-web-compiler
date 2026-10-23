@@ -4,7 +4,6 @@ const REPO_BRANCH = process.env.GITHUB_BRANCH || 'main';
 const MAX_ZIP_BYTES = 12 * 1024 * 1024;
 
 function setCors(res) {
-    res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
     res.setHeader(
