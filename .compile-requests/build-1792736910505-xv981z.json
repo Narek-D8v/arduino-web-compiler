@@ -1,1 +1,0 @@
-{"code":"void setup() {\n// put your setup code here, to run once:\nSerial.begin(9600);\n}\n\nvoid loop() {\n// put your main code here, to run repeatedly:\nSerial.println(analogRead(4));\ndelay(500);\nSerial.println(analogRead(5));\ndelay(500);\n}\n","files":[],"features":{"smartWifi":false}}
