@@ -1,0 +1,1 @@
+{"code":"#include <Arduino.h>\n\nvoid setup() {\n  Serial.begin(115200);\n  delay(2000);\n  Serial.println(\"RAVA TEST STARTED\");\n}\n\nvoid loop() {\n  Serial.println(\"RAVA OK\");\n  delay(3000);\n}","files":[],"features":{"smartWifi":true},"smartWifi":{"enabled":true,"apSsid":"ESP32-Setup","apPass":"","portalTitle":"ESP32 Wi-Fi Setup","accent":"#00e676","timeoutSeconds":12}}
