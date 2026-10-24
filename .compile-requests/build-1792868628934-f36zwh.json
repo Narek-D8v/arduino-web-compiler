@@ -1,0 +1,1 @@
+{"code":"#include <WiFi.h>\n\nconst int n = 0;\n\nvoid setup() {\n  String ssid = \"Да\" + String(n);\n  WiFi.softAP(ssid.c_str(), \"12345678\");\n}\n\nvoid loop() {\n  while (true) {\n    setup();\n    delay(2000);\n  }\n}\n","files":[],"features":{"smartWifi":false}}
