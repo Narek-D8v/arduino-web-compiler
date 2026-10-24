@@ -1,0 +1,1 @@
+{"code":"#include <WiFi.h>\n\nvoid main() {\n  WiFi.softAP(\"Да\", \"12345678\");\n}\n\nvoid loop() {\n}\n","files":[],"features":{"smartWifi":false}}
