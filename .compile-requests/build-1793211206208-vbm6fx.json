@@ -1,1 +1,0 @@
-{"code":"void setup() {\n pinMode(13, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(13, HIGH);\n  delay(200);\n  digitalWrite(13, LOW);\n  delay(200);\n}\n","files":[],"features":{"smartWifi":false}}
