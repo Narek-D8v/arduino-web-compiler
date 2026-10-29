@@ -1,1 +1,0 @@
-{"code":"void setup() {\n  pinMode(13, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(13, HIGH);  // LED ON\n  delay(1000);             // තත්පර 1ක් ඉන්න\n\n  digitalWrite(13, LOW);   // LED OFF\n  delay(1000);             // තත්පර 1ක් ඉන්න\n}","files":[],"features":{"smartWifi":false}}
