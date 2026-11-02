@@ -1,0 +1,1 @@
+{"code":"#include <Servo.h>\n\nServo servo1;\nint i=0;\n\n\n\nvoid setup(){\nservo1.attach(8);\npinMode(12,input)\n}\n\n\nvoid loop (){\nif (digitalRead(12) == 0 && i ==1){\nservo1.write(90);\ni=0;\ndelay(500);\n}\nif (digitalRead(12) ==0 &&i ==0){\nservo1.write(0);\ni=1;\ndelay(500);\n}\n}","files":[],"features":{"smartWifi":false}}
