@@ -1,0 +1,1 @@
+{"code":"#define LED 2\n\nvoid setup() {\n  pinMode(LED, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(LED, HIGH);   // Turn the LED on\n  delay(500);                // Wait for 500 milliseconds (0.5 seconds)\n  digitalWrite(LED, LOW);    // Turn the LED off\n  delay(500);                // Wait for 500 milliseconds\n}\n","files":[],"features":{"smartWifi":false}}
