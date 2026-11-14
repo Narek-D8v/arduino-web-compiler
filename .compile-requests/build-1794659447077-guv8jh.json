@@ -1,1 +1,0 @@
-{"code":"#include <Arduino.h>\n\nvoid setup() {\n  Serial.begin(115200);\n    Serial.println(\"MX SYSTEM STARTED\");\n    }\n\n    void loop() {\n      Serial.println(\"MX RUNNING\");\n        delay(1000);\n        }","files":[],"features":{"smartWifi":false}}
