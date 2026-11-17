@@ -1,0 +1,1 @@
+{"code":"\nint buzzer = 6;\n\nvoid setup() {\n  pinMode(buzzer, OUTPUT);\n}\n\nvoid loop() {\n  tone(buzzer, 1000); // 1000 Hz ovoz\n  delay(1000);\n\n  noTone(buzzer); // Ovozni o'chirish\n  delay(1000);\n}\n","files":[],"features":{"smartWifi":false}}
