@@ -1,0 +1,1 @@
+{"code":"const int MIC_PIN = 34;\n\nvoid setup() {\n  Serial.begin(115200);\n  delay(1000);\n\n  Serial.println(\"ESP32 Sound Sensor Started!\");\n}\n\nvoid loop() {\n  int soundLevel = analogRead(MIC_PIN);\n\n  Serial.print(\"Sound level: \");\n  Serial.println(soundLevel);\n\n  delay(200);\n}\n","files":[],"features":{"smartWifi":false}}
