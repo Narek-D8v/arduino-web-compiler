@@ -1,0 +1,1 @@
+{"code":"\n#define MIC_PIN 34\n\nvoid setup() {\n  Serial.begin(115200);\n  analogReadResolution(12);\n}\n\nvoid loop() {\n  int sound = analogRead(MIC_PIN);\n\n  Serial.print(\"Sound Level: \");\n  Serial.println(sound);\n\n  delay(20);\n}\n","files":[],"features":{"smartWifi":false}}
