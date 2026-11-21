@@ -1,0 +1,1 @@
+{"code":"#include \"SSD1306Wire.h\"\n#include \"esp8266-oled-ssd1306-master.h\"\n\nSSD1306Wire d(0x3c, A4, A5, GEOMETRY_128_64);\n\nvoid setup() {\n  d.init();\n  d.clear();\n  d.setFont(ArialMT_Plain_16);\n  d.drawString(0, 0, \"Hello Tim\");\n  d.display();\n}\n\nvoid loop() {}","files":[],"features":{"smartWifi":false}}
