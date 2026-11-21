@@ -1,0 +1,1 @@
+{"code":"#include <Wire.h>\n#include <LiquidCrystal_I2C.h>\n\nLiquidCrystal_I2C LCD = LiquidCrystal_I2C(0x27, 16, 2);\n\n#define I2C_SDA 5\n#define I2C_SCL 4\n\nvoid setup() {\n  Serial.begin(115200);\n  Wire.begin(I2C_SDA, I2C_SCL);\n  LCD.init();\n  LCD.backlight();\n  LCD.setCursor(6, 0);\n  LCD.print(\"TTTT\");\n}\nvoid loop() {}","files":[],"features":{"smartWifi":false}}
