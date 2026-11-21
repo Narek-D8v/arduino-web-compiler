@@ -1,0 +1,1 @@
+{"code":"#include <wire.h>\n#include <liquidCrystal_I2C> lcd(0x27, 16, 2);\nvoid setup() {\n  lcd.init();\n  lcd.backlight();\n  lcd.setcursor(0,0);\n  lcd.print(\"Hi!\")\n}","files":[],"features":{"smartWifi":false}}
