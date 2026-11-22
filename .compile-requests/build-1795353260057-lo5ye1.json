@@ -1,1 +1,0 @@
-{"code":"void setup() {\n  Serial.begin(115200);\n  delay(2000);\n  Serial.println(\"ESP32 ALIVE!\");\n}\n\nvoid loop() {\n  Serial.println(\"RUNNING\");\n  delay(1000);\n}\n","files":[],"features":{"smartWifi":false}}
