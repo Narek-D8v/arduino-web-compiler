@@ -1,1 +1,0 @@
-{"code":"\nvoid setup() {\n  Serial.begin(115200);\n  pinMode(21, OUTPUT);\n  Serial.println(\"ESP32 diagnostic started\");\n}\n\nvoid loop() {\n  Serial.println(\"Backlight ON\");\n  digitalWrite(21, HIGH);\n  delay(3000);\n\n  Serial.println(\"Backlight OFF\");\n  digitalWrite(21, LOW);\n  delay(3000);\n}\n","files":[],"features":{"smartWifi":false}}
