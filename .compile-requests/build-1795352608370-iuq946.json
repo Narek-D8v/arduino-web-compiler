@@ -1,0 +1,1 @@
+{"code":"#include <BLEDevice.h>\n#include <BLEServer.h>\n\nvoid setup() {\n  Serial.begin(115200);\n\n  BLEDevice::init(\"ESP32_TEST\");\n\n  BLEServer *server = BLEDevice::createServer();\n\n  Serial.println(\"BLE STARTED\");\n}\n\nvoid loop() {\n  delay(1000);\n}\n","files":[],"features":{"smartWifi":false}}
