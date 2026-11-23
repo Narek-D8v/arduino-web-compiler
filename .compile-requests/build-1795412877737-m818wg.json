@@ -1,0 +1,1 @@
+{"code":"\n#ifdef ESP32\n  #define LED_PIN 2       // ESP32 Dev Module built-in LED\n#else\n  #define LED_PIN 13      // Arduino Uno built-in LED\n#endif\n\nvoid setup() {\n  pinMode(LED_PIN, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(LED_PIN, HIGH);\n  delay(1000);\n\n  digitalWrite(LED_PIN, LOW);\n  delay(1000);\n}","files":[],"features":{"smartWifi":false}}
