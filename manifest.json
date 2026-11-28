@@ -1,0 +1,12 @@
+{
+  "name": "Arduino Web Compiler",
+  "version": "2026-11-28T11:41:05.665Z",
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        { "path": "merged-firmware.bin", "offset": 0 }
+      ]
+    }
+  ]
+}
